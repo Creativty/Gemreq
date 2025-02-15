@@ -1,7 +1,7 @@
 package ssl
 
 import "core:c"
-foreign import openssl "libssl.so"
+foreign import openssl "bin/libssl.so"
 
 SSL :: distinct rawptr
 SSL_CTX :: distinct rawptr
