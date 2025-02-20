@@ -14,6 +14,38 @@ import "core:bytes"
 import "core:strings"
 import "core:strconv"
 
+GEMINI_PORT :: 1965
+GEMINI_PROTOCOL :: "gemini://"
+
+Gemini_Error :: union #shared_nil {
+	mem.Allocator_Error,
+	net.Network_Error,
+	io.Error,
+	cstring,
+}
+
+Gemini_Status :: enum {
+	Unreachable,
+	Input_Expected = 10,
+	Input_Sensitive = 11,
+	Success = 20,
+	Redirect_Temporary = 30,
+	Redirect_Permanent = 31,
+	Failure_Temporary = 40,
+	Failure_Temporary_Server_Unavailable = 41,
+	Failure_Temporary_CGI = 42,
+	Failure_Temporary_Proxy = 43,
+	Failure_Temporary_Slow_Down = 44,
+	Failure_Permanent = 50,
+	Failure_Permanent_Not_Found = 51,
+	Failure_Permanent_Gone = 52,
+	Failure_Permanent_Proxy_Request_Refused = 53,
+	Failure_Permanent_Bad_Request = 59,
+	Client_Certificate = 60,
+	Client_Certificate_Not_Authorized = 61,
+	Client_Certificate_Not_Valid = 62,
+}
+
 Gemini_Element :: union {
 	Gemini_Element_Text,
 	Gemini_Element_Link,
@@ -28,25 +60,21 @@ Gemini_Element_Link :: struct {
 	text: string,
 }
 
-Gemini_Error :: union #shared_nil {
-	mem.Allocator_Error,
-	net.Network_Error,
-	io.Error,
-	cstring,
+Gemini_Document :: struct {
+	mime: Maybe(string),
+	location: Maybe(string),
+	status: Gemini_Status,
+	elements: [dynamic]Gemini_Element,
 }
 
-GEMINI_PORT :: 1965
-
-gemini_connect :: proc() -> net.TCP_Socket {
-	socket, err := net.dial_tcp(HOSTNAME, PORT)
-	if err != nil {
-		fmt.eprintfln("gemini: could not dial gemini:://%s:%d / %v", HOSTNAME, PORT, err)
-		os.exit(1)
-	}
-	return socket
+gemini_delete :: proc(doc: ^Gemini_Document) {
+	if doc.mime != nil do delete(doc.mime.(string))
+	if doc.location != nil do delete(doc.location.(string))
+	clear(&doc.elements)
+	delete(doc.elements)
 }
 
-gemini_fetch :: proc(hostname: string, path := "/", port := GEMINI_PORT, allocator := context.allocator) -> (doc: string, err: Gemini_Error) {
+gemini_fetch :: proc(hostname: string, port := GEMINI_PORT, path := "/", allocator := context.allocator) -> (doc: string, err: Gemini_Error) {
 	// Open network socket
 	socket := net.dial_tcp(hostname, port) or_return
 	defer net.close(socket)
@@ -97,41 +125,6 @@ gemini_fetch :: proc(hostname: string, path := "/", port := GEMINI_PORT, allocat
 	}
 	doc = strings.clone(strings.to_string(buff_sb))
 	return doc, nil
-}
-
-Gemini_Status :: enum {
-	Unreachable,
-	Input_Expected = 10,
-	Input_Sensitive = 11,
-	Success = 20,
-	Redirect_Temporary = 30,
-	Redirect_Permanent = 31,
-	Failure_Temporary = 40,
-	Failure_Temporary_Server_Unavailable = 41,
-	Failure_Temporary_CGI = 42,
-	Failure_Temporary_Proxy = 43,
-	Failure_Temporary_Slow_Down = 44,
-	Failure_Permanent = 50,
-	Failure_Permanent_Not_Found = 51,
-	Failure_Permanent_Gone = 52,
-	Failure_Permanent_Proxy_Request_Refused = 53,
-	Failure_Permanent_Bad_Request = 59,
-	Client_Certificate = 60,
-	Client_Certificate_Not_Authorized = 61,
-	Client_Certificate_Not_Valid = 62,
-}
-
-Gemini_Document :: struct {
-	mime: Maybe(string),
-	location: Maybe(string),
-	status: Gemini_Status,
-	elements: [dynamic]Gemini_Element,
-}
-
-gemini_delete :: proc(doc: Gemini_Document) {
-	if doc.mime != nil do delete(doc.mime.(string))
-	if doc.location != nil do delete(doc.location.(string))
-	delete(doc.elements)
 }
 
 reader_read_delimiter :: proc(br: ^bufio.Reader, delimiter: string, allocator := context.allocator) -> (text: string, err: Gemini_Error) {
@@ -217,4 +210,48 @@ gemini_parse :: proc(src: string, allocator := context.allocator) -> (doc: Gemin
 		}
 	}
 	return
+}
+
+gemini_parse_url :: proc(url: string, allocator := context.allocator) -> (hostname: string, port: int, path: string, ok: bool) {
+	hostname_start, hostname_length: int
+	if strings.has_prefix(url, GEMINI_PROTOCOL) do hostname_start = len(GEMINI_PROTOCOL)
+
+	// Hostname
+	for hostname_length < len(url[hostname_start:]) {
+		portion := url[hostname_start:]
+		if portion[hostname_length] == ':' || portion[hostname_length] == '/' do break
+		hostname_length += 1
+	}
+	// Port (Optional)
+	port_length: int
+	port_start := hostname_start + hostname_length - 1
+	if url[port_start] == ':' {
+		port_start += 1
+		for port_length < len(url[port_start:]) {
+			portion := url[hostname_start:]
+			if portion[port_length] < '0' || portion[port_length] <= '9' do break
+			port_length += 1
+		}
+	}
+	// Path (Optional)
+	path_length: int
+	path_start := port_start + port_length
+	if url[path_start] == '/' do path_length = len(url[path_start:])
+
+	port = GEMINI_PORT
+	if port_length == 0 {
+		port_parsed, port_ok := strconv.parse_int(url[port_start:][:port_length])
+		if port_ok do port = port_parsed
+	}
+	path = strings.clone("/" if path_length == 0 else url[path_start:])
+	hostname = strings.clone("" if hostname_length == 0 else url[hostname_start:][:hostname_length])
+	return hostname, port, path, hostname_length > 0
+}
+
+gemini_status_is_redirect :: proc(status: Gemini_Status) -> (is_redirect: bool) {
+	#partial switch status {
+	case .Redirect_Temporary, .Redirect_Permanent:
+		return true
+	}
+	return false
 }
