@@ -7,6 +7,11 @@ import "core:math"
 import "core:strings"
 import "vendor:raylib"
 
+env_delete :: proc(env: ^Environment) {
+	for &endpoint in env.history do endpoint_delete(endpoint)
+	gemini_delete(&env.document)
+}
+
 main :: proc() {
 	when false {
 		track: mem.Tracking_Allocator
@@ -29,29 +34,11 @@ main :: proc() {
 		}
 	}
 
-	// hostname := "geminiprotocol.net"
-	// defer delete(hostname_c)
-
-	// doc_bytes, err := gemini_fetch(hostname)
-	// if err != nil {
-	///  	fmt.eprintfln("gemini: error %v", err)
-	//  	os.exit(1)
-	// }
-	// defer delete(doc_bytes)
-
-	// doc, err_doc := gemini_parse(doc_bytes)
-	// if err_doc != nil {
-	//  	fmt.eprintfln("gemini: error %v", err)
-	//  	os.exit(1)
-	// }
-	// defer gemini_delete(doc)
-
 	env: Environment
-	env_navigate(&env, "geminiprotocol.net")
-	if env.document.status != .Success || len(env.document.elements) == 0 {
-		// fmt.eprintfln("Failed loading the document %#v", env)
-		os.exit(1)
-	}
+	env.history = make([dynamic]Gemini_Endpoint)
+	env_navigate_absolute(&env, "geminiprotocol.net")
+	if env.document.status != .Success || len(env.document.elements) == 0 do os.exit(1)
+	defer env_delete(&env)
 
 	// Initialize raylib
 	using raylib
@@ -68,27 +55,33 @@ main :: proc() {
 
 	for !WindowShouldClose() {
 		if env.document_is_loaded {
-			if env.element_active != nil {
+			if env.element_active != nil { // Trigger navigation
 				#partial switch element in env.element_active.(Gemini_Element) {
 				case Gemini_Element_Link:
 					url := element.url
 					if strings.has_prefix(url, "https://") {
 						fmt.eprintfln("gemreq: todo!: HTTPS links are not supported %s", url)
-					} else if strings.has_prefix(url, "gemini://") {
-						env_navigate(&env, url)
-					} else if strings.has_prefix(url, "/") { // Absolute path
-						env_navigate_path(&env, url)
-					} else { // Relative path
-						path := strings.join({ env.endpoint.path, url }, "")
+					} else if strings.has_prefix(url, "gemini://") { // Absolute path
+						env_navigate_absolute(&env, url)
+					} else if strings.has_prefix(url, "/") {
+						env_navigate_relative(&env, url)
+					} else {
+						// BUG(XENOBAS): navigating from .../docs/faq.gmi -> faq-section-4.gmi
+						// results in .../docs/faq.gmifaq-section-4.gmi
+						endpoint := env_endpoint(&env)
+						path := strings.join({ endpoint.path, url }, "")
 						defer delete(path)
 
-						env_navigate_path(&env, path)
+						env_navigate_relative(&env, path)
 					}
 				}
 			}
 			env.element_active = nil
 		}
 		mouse := GetMousePosition()
+		if (IsKeyDown(.LEFT_SUPER) || IsKeyDown(.RIGHT_SUPER)) && IsKeyPressed(.LEFT) {
+			env_history_pop(&env)
+		}
 
 		BeginDrawing()
 		defer EndDrawing()
@@ -116,10 +109,7 @@ main :: proc() {
 						height = measure.y
 					}
 					is_hover := CheckCollisionPointRec(mouse, text_bounds)
-					if is_hover && IsMouseButtonPressed(.LEFT) {
-						env.element_active = element_untyped
-						fmt.println(element.text)
-					}
+					if is_hover && IsMouseButtonPressed(.LEFT) do env.element_active = element_untyped
 
 					DrawTextEx(font, text, { PADDING, PADDING + render_offset }, size, CHAR_SPACING, COLOR_LINK)
 					render_offset += measure.y

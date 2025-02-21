@@ -3,7 +3,7 @@ package gemini
 import "core:math"
 import "vendor:raylib"
 
-SCALE : f32 : 1.2
+SCALE : f32 : 1.4
 
 PADDING			:= math.floor(24 * SCALE)
 
