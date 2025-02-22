@@ -95,17 +95,10 @@ env_history_navigate_endpoint :: proc(env: ^Environment, endpoint: Gemini_Endpoi
 	return true
 }
 
-env_history_pop :: proc(env: ^Environment) {
-	if len(env.history) > 1 {
-		endpoint_delete(pop(&env.history))
-		endpoint := env_endpoint(env)
-		env_history_navigate_endpoint(env, endpoint, false)
-	}
-}
-
 env_history_navigate_link :: proc(env: ^Environment, element: Gemini_Element_Link) {
 	url := element.url
 	if strings.has_prefix(url, "https://") do fmt.eprintfln("gemreq: todo!: HTTPS links are not supported %s", url)
+	else if strings.has_prefix(url, "gopher://") do fmt.eprintfln("gemreq: todo!: Gopher links are not supported %s", url)
 	else if strings.has_prefix(url, "gemini://") do env_history_navigate_absolute(env, url)
 	else if strings.has_prefix(url, "/") do env_history_navigate_relative(env, url)
 	else {
@@ -119,6 +112,14 @@ env_history_navigate_link :: proc(env: ^Environment, element: Gemini_Element_Lin
 	}
 }
 
+env_history_pop :: proc(env: ^Environment) {
+	if len(env.history) > 1 {
+		endpoint_delete(pop(&env.history))
+		endpoint := env_endpoint(env)
+		env_history_navigate_endpoint(env, endpoint, false)
+	}
+}
+
 env_update :: proc(env: ^Environment) {
 	using raylib
 	mouse := GetMousePosition()
@@ -128,6 +129,7 @@ env_update :: proc(env: ^Environment) {
 		#partial switch element in env.element_active.(Gemini_Element) {
 		case Gemini_Element_Link:
 			env_history_navigate_link(env, element)
+			SetMouseCursor(.DEFAULT)
 		}
 		env.element_active = nil
 	}
@@ -143,6 +145,7 @@ env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
 
 	render_offset: f32
 	mouse := GetMousePosition()
+	is_something_hover := false
 	for element_untyped in env.document.elements {
 		if render_offset >= HEIGHT do break
 		switch element in element_untyped {
@@ -165,12 +168,18 @@ env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
 			is_hover := CheckCollisionPointRec(mouse, text_bounds)
 			if is_hover && IsMouseButtonPressed(.LEFT) do env.element_active = element_untyped
 
-			DrawTextEx(font, text, { PADDING, PADDING + render_offset }, size, CHAR_SPACING, COLOR_LINK)
+			color := is_hover ? COLOR_LINK : COLOR_TEXT
+			if is_hover {
+				is_something_hover = true
+				SetMouseCursor(.POINTING_HAND)
+			}
+			DrawTextEx(font, text, { PADDING, PADDING + render_offset }, size, CHAR_SPACING, color)
 			render_offset += measure.y
-			DrawLine(i32(PADDING), i32(PADDING + render_offset), i32(PADDING + measure.x), i32(PADDING + render_offset), is_hover ? COLOR_TEXT : COLOR_LINK)
+			DrawLine(i32(PADDING), i32(PADDING + render_offset), i32(PADDING + measure.x), i32(PADDING + render_offset), color)
 			render_offset += HEIGHT_DIVIDER
 		}
 	}
+	if !is_something_hover do SetMouseCursor(.DEFAULT)
 }
 
 env_render_document_error :: proc(env: ^Environment, allocator := context.allocator) {
