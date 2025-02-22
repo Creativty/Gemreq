@@ -69,13 +69,14 @@ text_wrap :: proc(font: Font, text: string, size, width, spacing: f32, allocator
 	return
 }
 
-element_draw_text :: proc(env: ^Environment, element: Gemini_Element_Text,
+draw_text_element :: proc(env: ^Environment, element: Gemini_Element_Text,
 	offset: f32,
 	width: f32,
 	allocator := context.allocator) -> (height: f32)
 {
 	using raylib
 
+	// TODO(XENOBAS): Use a function to determin text display options, instead of this mess.
 	font := env.fonts[.Bold if element.heading > 0 else .Normal][.Heading if element.heading > 0 else .Paragraph]
 	size := f32(HEIGHT_CHAR * (CHAR_FACTOR_HEADING if element.heading > 0 else CHAR_FACTOR_PARAGRAPH))
 	spacing := f32(CHAR_SPACING)
@@ -85,7 +86,7 @@ element_draw_text :: proc(env: ^Environment, element: Gemini_Element_Text,
 	
 	offset_local: f32
 	for line in lines {
-		text := strings.clone_to_cstring(line)
+		text := strings.clone_to_cstring(line, allocator)
 		defer delete(text)
 
 		measure := MeasureTextEx(font, text, size, spacing)

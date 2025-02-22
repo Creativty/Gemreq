@@ -7,11 +7,17 @@ import "vendor:raylib"
 
 Environment :: struct {
 	fonts: Font_Group,
+	scroll: f32,
 	document: Gemini_Document,
 	document_is_loaded: bool,
 	element_active: Maybe(Gemini_Element),
 	history: [dynamic]Gemini_Endpoint,
-	error: Gemini_Error
+	error: Gemini_Error,
+}
+
+env_delete :: proc(env: ^Environment) {
+	for &endpoint in env.history do endpoint_delete(endpoint)
+	gemini_delete(&env.document)
 }
 
 env_load_fonts :: proc(env: ^Environment) {
@@ -36,25 +42,25 @@ env_endpoint :: proc(env: ^Environment) -> Gemini_Endpoint {
 	return env.history[len(env.history) - 1]
 }
 
-env_navigate_absolute :: proc(env: ^Environment, url: string, history_append := true, allocator := context.allocator) -> (ok: bool) {
+env_history_navigate_absolute :: proc(env: ^Environment, url: string, history_append := true, allocator := context.allocator) -> (ok: bool) {
 	host, port, path, url_ok := gemini_parse_url(url)
 	if !url_ok {
 		env.error = strings.clone_to_cstring("failed parsing url", allocator)
 		return false
 	}
-	return env_navigate_endpoint(env, { host = host, path = path, port = port }, history_append, allocator)
+	return env_history_navigate_endpoint(env, { host = host, path = path, port = port }, history_append, allocator)
 }
 
-env_navigate_relative :: proc(env: ^Environment, path: string, history_append := true, allocator := context.allocator) -> (ok: bool) {
-	assert(env.document_is_loaded, "calling env_navigate_path without a parent document")
+env_history_navigate_relative :: proc(env: ^Environment, path: string, history_append := true, allocator := context.allocator) -> (ok: bool) {
+	assert(env.document_is_loaded, "calling env_history_navigate_path without a parent document")
 
 	endpoint := env_endpoint(env)
 	endpoint.host = strings.clone(endpoint.host, allocator)
 	endpoint.path = strings.clone(path, allocator)
-	return env_navigate_endpoint(env, endpoint, history_append, allocator)
+	return env_history_navigate_endpoint(env, endpoint, history_append, allocator)
 }
 
-env_navigate_endpoint :: proc(env: ^Environment, endpoint: Gemini_Endpoint, history_append := true, allocator := context.allocator) -> (ok: bool) {
+env_history_navigate_endpoint :: proc(env: ^Environment, endpoint: Gemini_Endpoint, history_append := true, allocator := context.allocator) -> (ok: bool) {
 	fmt.printfln("gemreq: attempting navigating to %s:%d%s", endpoint.host, endpoint.port, endpoint.path)
 
 	// Cleanup previous navigation
@@ -84,7 +90,7 @@ env_navigate_endpoint :: proc(env: ^Environment, endpoint: Gemini_Endpoint, hist
 
 	if gemini_status_is_redirect(document.status) && document.location != nil {
 		location := document.location.(string)
-		return env_navigate_absolute(env, location, false, allocator)
+		return env_history_navigate_absolute(env, location, false, allocator)
 	}
 	return true
 }
@@ -93,6 +99,143 @@ env_history_pop :: proc(env: ^Environment) {
 	if len(env.history) > 1 {
 		endpoint_delete(pop(&env.history))
 		endpoint := env_endpoint(env)
-		env_navigate_endpoint(env, endpoint, false)
+		env_history_navigate_endpoint(env, endpoint, false)
+	}
+}
+
+env_history_navigate_link :: proc(env: ^Environment, element: Gemini_Element_Link) {
+	url := element.url
+	if strings.has_prefix(url, "https://") do fmt.eprintfln("gemreq: todo!: HTTPS links are not supported %s", url)
+	else if strings.has_prefix(url, "gemini://") do env_history_navigate_absolute(env, url)
+	else if strings.has_prefix(url, "/") do env_history_navigate_relative(env, url)
+	else {
+		// BUG(XENOBAS): navigating from .../docs/faq.gmi -> faq-section-4.gmi
+		// results in .../docs/faq.gmifaq-section-4.gmi
+		endpoint := env_endpoint(env)
+		path := strings.join({ endpoint.path, url }, "")
+
+		env_history_navigate_relative(env, path)
+		delete(path)
+	}
+}
+
+env_update :: proc(env: ^Environment) {
+	using raylib
+	mouse := GetMousePosition()
+
+	if !env.document_is_loaded do return
+	if env.element_active != nil { // Trigger navigation
+		#partial switch element in env.element_active.(Gemini_Element) {
+		case Gemini_Element_Link:
+			env_history_navigate_link(env, element)
+		}
+		env.element_active = nil
+	}
+	key_navigate_back := (IsKeyDown(.LEFT_SUPER) || IsKeyDown(.RIGHT_SUPER)) && IsKeyPressed(.LEFT)
+	if key_navigate_back do env_history_pop(env)
+		
+	env.scroll += GetMouseWheelMove() * SCROLL_SPEED
+	env.scroll = math.max(env.scroll, 0)
+}
+
+env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
+	using raylib
+
+	render_offset: f32
+	mouse := GetMousePosition()
+	for element_untyped in env.document.elements {
+		if render_offset >= HEIGHT do break
+		switch element in element_untyped {
+		case Gemini_Element_Text:
+			height := draw_text_element(env, element, render_offset, WIDTH_TEXT, allocator)
+			render_offset += height
+		case Gemini_Element_Link: // BUG(XENOBAS): Does not have wrapping
+			size := f32(HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH)
+			font := env.fonts[.Bold][.Paragraph]
+			text := strings.clone_to_cstring(element.text, allocator)
+			defer delete(text)
+
+			measure := MeasureTextEx(font, text, size, CHAR_SPACING)
+			text_bounds := Rectangle{
+				x = PADDING,
+				y = PADDING + render_offset,
+				width = measure.x,
+				height = measure.y
+			}
+			is_hover := CheckCollisionPointRec(mouse, text_bounds)
+			if is_hover && IsMouseButtonPressed(.LEFT) do env.element_active = element_untyped
+
+			DrawTextEx(font, text, { PADDING, PADDING + render_offset }, size, CHAR_SPACING, COLOR_LINK)
+			render_offset += measure.y
+			DrawLine(i32(PADDING), i32(PADDING + render_offset), i32(PADDING + measure.x), i32(PADDING + render_offset), is_hover ? COLOR_TEXT : COLOR_LINK)
+			render_offset += HEIGHT_DIVIDER
+		}
+	}
+}
+
+env_render_document_error :: proc(env: ^Environment, allocator := context.allocator) {
+	using raylib
+
+	offset := Vector2{ WIDTH / 2.0, HEIGHT / 4.0 }
+	render_title: {
+		font := env.fonts[.Bold][.Heading]
+		size := HEIGHT_CHAR * CHAR_FACTOR_HEADING
+		width := WIDTH_TEXT
+		spacing := CHAR_SPACING
+
+		source := gemini_status_to_text(env.document.status)
+
+		blocks := text_wrap(font, source, size, width, spacing, allocator)
+		defer delete(blocks)
+
+		local_offset_y: f32
+		for block in blocks {
+			text := strings.clone_to_cstring(block, allocator)
+			measure := MeasureTextEx(font, text, size, spacing)
+			origin := Vector2{ measure.x / 2.0, 0 }
+			DrawTextPro(font, text, { offset.x, offset.y + local_offset_y }, origin, 0.0, size, spacing, COLOR_DANGER)
+
+			local_offset_y += measure.y
+		}
+		local_offset_y += HEIGHT_DIVIDER
+	}
+
+	render_description: {
+		font := env.fonts[.Normal][.Paragraph]
+		size := HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH
+		width := WIDTH_TEXT / 5 * 4
+		spacing := CHAR_SPACING
+
+		description := gemini_status_to_description(env.document.status)
+		source := strings.clone(description, allocator)
+		defer delete(source)
+
+		blocks := text_wrap(font, source, size, width, spacing, allocator)
+		defer delete(blocks)
+
+		offset.y += PADDING + (HEIGHT_CHAR + CHAR_FACTOR_HEADING)
+		local_offset_y: f32
+		for block in blocks {
+			text := strings.clone_to_cstring(block, allocator)
+			measure := MeasureTextEx(font, text, size, spacing)
+			origin := Vector2{ measure.x / 2.0, 0 }
+			DrawTextPro(font, text, { offset.x, offset.y + local_offset_y }, origin, 0.0, size, spacing, COLOR_TEXT)
+
+			local_offset_y += measure.y
+		}
+		local_offset_y += HEIGHT_DIVIDER
+	}
+}
+
+env_render :: proc(env: ^Environment, allocator := context.allocator) {
+	using raylib
+
+
+	if !env.document_is_loaded do return
+	#partial switch env.document.status {
+	case .Success:
+		env_render_document(env, allocator)
+	case:
+		env_render_document_error(env, allocator)
 	}
 }

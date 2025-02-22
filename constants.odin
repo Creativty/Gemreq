@@ -3,7 +3,7 @@ package gemini
 import "core:math"
 import "vendor:raylib"
 
-SCALE : f32 : 1.4
+SCALE : f32 : 1.3
 
 PADDING			:= math.floor(24 * SCALE)
 
@@ -22,6 +22,9 @@ CHAR_SPACING			:= math.floor(SCALE * 1)
 CHAR_FACTOR_PARAGRAPH	:= math.floor(SCALE * 1)
 CHAR_FACTOR_HEADING		:= math.floor(SCALE * 2)
 
-COLOR_BG	:= raylib.GetColor(0xFFFFFFFF)
-COLOR_TEXT	:= raylib.GetColor(0x444444FF)
-COLOR_LINK	:= raylib.GetColor(0x578E7EFF)
+COLOR_BG		:= raylib.GetColor(0xFFFFFFFF)
+COLOR_TEXT		:= raylib.GetColor(0x444444FF)
+COLOR_LINK		:= raylib.GetColor(0x578E7EFF)
+COLOR_DANGER	:= raylib.GetColor(0x8E5762FF)
+
+SCROLL_SPEED			:= SCALE * 4
