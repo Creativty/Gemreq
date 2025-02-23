@@ -27,4 +27,4 @@ COLOR_TEXT		:= raylib.GetColor(0x444444FF)
 COLOR_LINK		:= raylib.GetColor(0x578E7EFF)
 COLOR_DANGER	:= raylib.GetColor(0x8E5762FF)
 
-SCROLL_SPEED			:= SCALE * 4
+SCROLL_SPEED			:= SCALE * 100

@@ -31,9 +31,10 @@ main :: proc() {
 
 	env: Environment
 	env.history = make([dynamic]Gemini_Endpoint)
+	defer env_delete(&env)
+
 	env_history_navigate_absolute(&env, "geminiprotocol.net")
 	if env.document.status != .Success || len(env.document.elements) == 0 do os.exit(1)
-	defer env_delete(&env)
 
 	// Initialize raylib
 	using raylib
@@ -43,12 +44,11 @@ main :: proc() {
 
 	// Startup window
 	InitWindow(i32(WIDTH), i32(HEIGHT), "Gemreq")
+	SetExitKey(.KEY_NULL)
 
 	// Load fonts
 	env_load_fonts(&env)
 	defer env_unload_fonts(&env)
-
-	SetExitKey(.KEY_NULL)
 
 	for !WindowShouldClose() {
 		env_update(&env)

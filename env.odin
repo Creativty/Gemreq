@@ -7,7 +7,7 @@ import "vendor:raylib"
 
 Environment :: struct {
 	fonts: Font_Group,
-	scroll: f32,
+	scroll, scroll_target: f32,
 	document: Gemini_Document,
 	document_is_loaded: bool,
 	element_active: Maybe(Gemini_Element),
@@ -60,6 +60,23 @@ env_history_navigate_relative :: proc(env: ^Environment, path: string, history_a
 	return env_history_navigate_endpoint(env, endpoint, history_append, allocator)
 }
 
+env_history_navigate_link :: proc(env: ^Environment, element: Gemini_Element_Link) {
+	url := element.url
+	if strings.has_prefix(url, "https://") do fmt.eprintfln("gemreq: todo!: HTTPS links are not supported %s", url)
+	else if strings.has_prefix(url, "gopher://") do fmt.eprintfln("gemreq: todo!: Gopher links are not supported %s", url)
+	else if strings.has_prefix(url, "gemini://") do env_history_navigate_absolute(env, url)
+	else if strings.has_prefix(url, "/") do env_history_navigate_relative(env, url)
+	else {
+		// BUG(XENOBAS): navigating from .../docs/faq.gmi -> faq-section-4.gmi
+		// results in .../docs/faq.gmifaq-section-4.gmi
+		endpoint := env_endpoint(env)
+		path := strings.join({ endpoint.path, url }, "")
+
+		env_history_navigate_relative(env, path)
+		delete(path)
+	}
+}
+
 env_history_navigate_endpoint :: proc(env: ^Environment, endpoint: Gemini_Endpoint, history_append := true, allocator := context.allocator) -> (ok: bool) {
 	fmt.printfln("gemreq: attempting navigating to %s:%d%s", endpoint.host, endpoint.port, endpoint.path)
 
@@ -77,6 +94,7 @@ env_history_navigate_endpoint :: proc(env: ^Environment, endpoint: Gemini_Endpoi
 	defer delete(bytes)
 
 	if history_append do append(&env.history, endpoint)
+	env.scroll_target = 0
 
 	// Parse the Gemini document for display
 	document, error_parse := gemini_parse(bytes)
@@ -93,23 +111,6 @@ env_history_navigate_endpoint :: proc(env: ^Environment, endpoint: Gemini_Endpoi
 		return env_history_navigate_absolute(env, location, false, allocator)
 	}
 	return true
-}
-
-env_history_navigate_link :: proc(env: ^Environment, element: Gemini_Element_Link) {
-	url := element.url
-	if strings.has_prefix(url, "https://") do fmt.eprintfln("gemreq: todo!: HTTPS links are not supported %s", url)
-	else if strings.has_prefix(url, "gopher://") do fmt.eprintfln("gemreq: todo!: Gopher links are not supported %s", url)
-	else if strings.has_prefix(url, "gemini://") do env_history_navigate_absolute(env, url)
-	else if strings.has_prefix(url, "/") do env_history_navigate_relative(env, url)
-	else {
-		// BUG(XENOBAS): navigating from .../docs/faq.gmi -> faq-section-4.gmi
-		// results in .../docs/faq.gmifaq-section-4.gmi
-		endpoint := env_endpoint(env)
-		path := strings.join({ endpoint.path, url }, "")
-
-		env_history_navigate_relative(env, path)
-		delete(path)
-	}
 }
 
 env_history_pop :: proc(env: ^Environment) {
@@ -136,8 +137,9 @@ env_update :: proc(env: ^Environment) {
 	key_navigate_back := (IsKeyDown(.LEFT_SUPER) || IsKeyDown(.RIGHT_SUPER)) && IsKeyPressed(.LEFT)
 	if key_navigate_back do env_history_pop(env)
 		
-	env.scroll += GetMouseWheelMove() * SCROLL_SPEED
-	env.scroll = math.max(env.scroll, 0)
+	env.scroll_target += -GetMouseWheelMove() * SCROLL_SPEED
+	env.scroll_target = math.max(env.scroll_target, 0)
+	env.scroll = math.lerp(env.scroll, env.scroll_target, f32(.3))
 }
 
 env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
@@ -147,39 +149,43 @@ env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
 	mouse := GetMousePosition()
 	is_something_hover := false
 	for element_untyped in env.document.elements {
-		if render_offset >= HEIGHT do break
+		if render_offset - env.scroll > HEIGHT_VIEW do break
 		switch element in element_untyped {
 		case Gemini_Element_Text:
 			height := draw_text_element(env, element, render_offset, WIDTH_TEXT, allocator)
 			render_offset += height
 		case Gemini_Element_Link: // BUG(XENOBAS): Does not have wrapping
-			size := f32(HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH)
-			font := env.fonts[.Bold][.Paragraph]
-			text := strings.clone_to_cstring(element.text, allocator)
-			defer delete(text)
+			height: f32
+			height, is_something_hover = draw_element_link(env, element, render_offset, WIDTH_TEXT, allocator)
+			render_offset += height
+			// size := f32(HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH)
+			// font := env.fonts[.Bold][.Paragraph]
+			// text := strings.clone_to_cstring(element.text, allocator)
+			// defer delete(text)
 
-			measure := MeasureTextEx(font, text, size, CHAR_SPACING)
-			text_bounds := Rectangle{
-				x = PADDING,
-				y = PADDING + render_offset,
-				width = measure.x,
-				height = measure.y
-			}
-			is_hover := CheckCollisionPointRec(mouse, text_bounds)
-			if is_hover && IsMouseButtonPressed(.LEFT) do env.element_active = element_untyped
+			// measure := MeasureTextEx(font, text, size, CHAR_SPACING)
+			// text_bounds := Rectangle{
+			// 	x = PADDING,
+			// 	y = PADDING + render_offset,
+			// 	width = measure.x,
+			// 	height = measure.y
+			// }
+			// is_hover := CheckCollisionPointRec(mouse, text_bounds)
+			// if is_hover && IsMouseButtonPressed(.LEFT) do env.element_active = element_untyped
 
-			color := is_hover ? COLOR_LINK : COLOR_TEXT
-			if is_hover {
-				is_something_hover = true
-				SetMouseCursor(.POINTING_HAND)
-			}
-			DrawTextEx(font, text, { PADDING, PADDING + render_offset }, size, CHAR_SPACING, color)
-			render_offset += measure.y
-			DrawLine(i32(PADDING), i32(PADDING + render_offset), i32(PADDING + measure.x), i32(PADDING + render_offset), color)
-			render_offset += HEIGHT_DIVIDER
+			// color := is_hover ? COLOR_LINK : COLOR_TEXT
+			// if is_hover {
+			// 	is_something_hover = true
+			// 	SetMouseCursor(.POINTING_HAND)
+			// }
+			// DrawTextEx(font, text, { PADDING, PADDING + render_offset }, size, CHAR_SPACING, color)
+			// render_offset += measure.y
+			// DrawLine(i32(PADDING), i32(PADDING + render_offset), i32(PADDING + measure.x), i32(PADDING + render_offset), color)
+			// render_offset += HEIGHT_DIVIDER
 		}
 	}
 	if !is_something_hover do SetMouseCursor(.DEFAULT)
+	else do SetMouseCursor(.POINTING_HAND)
 }
 
 env_render_document_error :: proc(env: ^Environment, allocator := context.allocator) {
