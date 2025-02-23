@@ -5,7 +5,35 @@ import "core:math"
 import "core:strings"
 import "vendor:raylib"
 
-env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
+env_render :: proc(env: ^Gemreq, allocator := context.allocator) {
+	using raylib
+
+	if !env.document_is_loaded do return
+	#partial switch env.document.status {
+	case .Success:
+		env_render_document(env, allocator)
+	case:
+		env_render_document_error(env, allocator)
+	}
+	if env.is_debug do env_render_debug(env, allocator)
+}
+
+env_render_debug :: proc(env: ^Gemreq, allocator := context.allocator) {
+	using raylib
+
+	text := fmt.caprintf("FPS: %d", GetFPS(), allocator = allocator)
+	defer delete(text)
+
+	font	:= env.assets.fonts[.Paragraph]
+	size	:= HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH
+	spacing	:= CHAR_SPACING
+	measure := MeasureTextEx(font, text, size, spacing)
+
+	DrawRectangle(0, 0, i32(measure.x + PADDING), i32(measure.y + PADDING), BLACK)
+	DrawText(text, i32(PADDING / 2.0), i32(PADDING / 2.0), i32(size), WHITE)
+}
+
+env_render_document :: proc(env: ^Gemreq, allocator := context.allocator) {
 	using raylib
 
 	render_offset: f32
@@ -24,12 +52,12 @@ env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
 	}
 }
 
-env_render_document_error :: proc(env: ^Environment, allocator := context.allocator) {
+env_render_document_error :: proc(env: ^Gemreq, allocator := context.allocator) {
 	using raylib
 
-	offset := Vector2{ WIDTH / 2.0, HEIGHT / 4.0 }
+	offset := Vector2{ WIDTH / 2.0, PADDING }
 	render_title: {
-		font := env.fonts[.Bold][.Heading]
+		font := env.assets.fonts[.Heading_1]
 		size := HEIGHT_CHAR * CHAR_FACTOR_HEADING
 		width := WIDTH_TEXT
 		spacing := CHAR_SPACING
@@ -53,9 +81,8 @@ env_render_document_error :: proc(env: ^Environment, allocator := context.alloca
 		}
 		local_offset_y += HEIGHT_DIVIDER
 	}
-
 	render_description: {
-		font := env.fonts[.Normal][.Paragraph]
+		font := env.assets.fonts[.Paragraph]
 		size := HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH
 		width := WIDTH_TEXT / 5 * 4
 		spacing := CHAR_SPACING
@@ -82,32 +109,4 @@ env_render_document_error :: proc(env: ^Environment, allocator := context.alloca
 		}
 		local_offset_y += HEIGHT_DIVIDER
 	}
-}
-
-env_render_debug :: proc(env: ^Environment, allocator := context.allocator) {
-	using raylib
-
-	text := fmt.caprintf("FPS: %d", GetFPS(), allocator = allocator)
-	defer delete(text)
-
-	font	:= env.fonts[.Normal][.Paragraph]
-	size	:= HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH
-	spacing	:= CHAR_SPACING
-	measure := MeasureTextEx(font, text, size, spacing)
-
-	DrawRectangle(0, 0, i32(measure.x + PADDING), i32(measure.y + PADDING), BLACK)
-	DrawText(text, i32(PADDING / 2.0), i32(PADDING / 2.0), i32(size), WHITE)
-}
-
-env_render :: proc(env: ^Environment, allocator := context.allocator) {
-	using raylib
-
-	if !env.document_is_loaded do return
-	#partial switch env.document.status {
-	case .Success:
-		env_render_document(env, allocator)
-	case:
-		env_render_document_error(env, allocator)
-	}
-	if env.is_debug do env_render_debug(env, allocator)
 }
