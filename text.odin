@@ -69,9 +69,10 @@ draw_text_element :: proc(env: ^Environment,
 	size := f32(HEIGHT_CHAR * (CHAR_FACTOR_HEADING if element.heading > 0 else CHAR_FACTOR_PARAGRAPH))
 	spacing := f32(CHAR_SPACING)
 
-	if offset - env.scroll > HEIGHT_VIEW do return
 	lines := text_wrap(font, element.text, size, width, spacing, allocator)
 	defer delete(lines)
+
+	if offset - env.scroll > HEIGHT_VIEW do return
 	
 	offset_local: f32
 	for line in lines {

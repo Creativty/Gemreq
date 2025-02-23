@@ -13,6 +13,7 @@ Environment :: struct {
 	element_active: Maybe(Gemini_Element),
 	history: [dynamic]Gemini_Endpoint,
 	error: Gemini_Error,
+	is_debug: bool,
 }
 
 env_delete :: proc(env: ^Environment) {
@@ -123,31 +124,33 @@ env_history_pop :: proc(env: ^Environment) {
 
 env_update :: proc(env: ^Environment) {
 	using raylib
-	mouse := GetMousePosition()
 
 	if !env.document_is_loaded do return
+
 	if env.element_active != nil { // Trigger navigation
 		#partial switch element in env.element_active.(Gemini_Element) {
 		case Gemini_Element_Link:
 			env_history_navigate_link(env, element)
-			SetMouseCursor(.DEFAULT)
 		}
 		env.element_active = nil
 	}
+
 	key_navigate_back := (IsKeyDown(.LEFT_SUPER) || IsKeyDown(.RIGHT_SUPER)) && IsKeyPressed(.LEFT)
 	if key_navigate_back do env_history_pop(env)
+
+	key_debug := IsKeyPressed(.F1)
+	if key_debug do env.is_debug = !env.is_debug
 		
 	env.scroll_target += -GetMouseWheelMove() * SCROLL_SPEED
 	env.scroll_target = math.max(env.scroll_target, 0)
-	env.scroll = math.lerp(env.scroll, env.scroll_target, f32(.3))
+	env.scroll = math.lerp(env.scroll, env.scroll_target, f32(.1))
 }
 
 env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
 	using raylib
 
 	render_offset: f32
-	mouse := GetMousePosition()
-	is_something_hover := false
+	is_something_hover: bool
 	for element_untyped in env.document.elements {
 		if render_offset - env.scroll > HEIGHT_VIEW do break
 		switch element in element_untyped {
@@ -158,34 +161,8 @@ env_render_document :: proc(env: ^Environment, allocator := context.allocator) {
 			height: f32
 			height, is_something_hover = draw_element_link(env, element, render_offset, WIDTH_TEXT, allocator)
 			render_offset += height
-			// size := f32(HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH)
-			// font := env.fonts[.Bold][.Paragraph]
-			// text := strings.clone_to_cstring(element.text, allocator)
-			// defer delete(text)
-
-			// measure := MeasureTextEx(font, text, size, CHAR_SPACING)
-			// text_bounds := Rectangle{
-			// 	x = PADDING,
-			// 	y = PADDING + render_offset,
-			// 	width = measure.x,
-			// 	height = measure.y
-			// }
-			// is_hover := CheckCollisionPointRec(mouse, text_bounds)
-			// if is_hover && IsMouseButtonPressed(.LEFT) do env.element_active = element_untyped
-
-			// color := is_hover ? COLOR_LINK : COLOR_TEXT
-			// if is_hover {
-			// 	is_something_hover = true
-			// 	SetMouseCursor(.POINTING_HAND)
-			// }
-			// DrawTextEx(font, text, { PADDING, PADDING + render_offset }, size, CHAR_SPACING, color)
-			// render_offset += measure.y
-			// DrawLine(i32(PADDING), i32(PADDING + render_offset), i32(PADDING + measure.x), i32(PADDING + render_offset), color)
-			// render_offset += HEIGHT_DIVIDER
 		}
 	}
-	if !is_something_hover do SetMouseCursor(.DEFAULT)
-	else do SetMouseCursor(.POINTING_HAND)
 }
 
 env_render_document_error :: proc(env: ^Environment, allocator := context.allocator) {
@@ -206,9 +183,12 @@ env_render_document_error :: proc(env: ^Environment, allocator := context.alloca
 		local_offset_y: f32
 		for block in blocks {
 			text := strings.clone_to_cstring(block, allocator)
+			defer delete(text)
+
 			measure := MeasureTextEx(font, text, size, spacing)
 			origin := Vector2{ measure.x / 2.0, 0 }
-			DrawTextPro(font, text, { offset.x, offset.y + local_offset_y }, origin, 0.0, size, spacing, COLOR_DANGER)
+			position := Vector2{ offset.x, offset.y + local_offset_y }
+			DrawTextPro(font, text, position, origin, 0.0, size, spacing, COLOR_DANGER)
 
 			local_offset_y += measure.y
 		}
@@ -232,9 +212,12 @@ env_render_document_error :: proc(env: ^Environment, allocator := context.alloca
 		local_offset_y: f32
 		for block in blocks {
 			text := strings.clone_to_cstring(block, allocator)
+			defer delete(text)
+
 			measure := MeasureTextEx(font, text, size, spacing)
 			origin := Vector2{ measure.x / 2.0, 0 }
-			DrawTextPro(font, text, { offset.x, offset.y + local_offset_y }, origin, 0.0, size, spacing, COLOR_TEXT)
+			position := Vector2{ offset.x, offset.y + local_offset_y }
+			DrawTextPro(font, text, position, origin, 0.0, size, spacing, COLOR_TEXT)
 
 			local_offset_y += measure.y
 		}
@@ -242,9 +225,23 @@ env_render_document_error :: proc(env: ^Environment, allocator := context.alloca
 	}
 }
 
-env_render :: proc(env: ^Environment, allocator := context.allocator) {
+env_render_debug :: proc(env: ^Environment, allocator := context.allocator) {
 	using raylib
 
+	text := fmt.caprintf("FPS: %d", GetFPS(), allocator = allocator)
+	defer delete(text)
+
+	font	:= env.fonts[.Normal][.Paragraph]
+	size	:= HEIGHT_CHAR * CHAR_FACTOR_PARAGRAPH
+	spacing	:= CHAR_SPACING
+	measure := MeasureTextEx(font, text, size, spacing)
+
+	DrawRectangle(0, 0, i32(measure.x + PADDING), i32(measure.y + PADDING), BLACK)
+	DrawText(text, i32(PADDING / 2.0), i32(PADDING / 2.0), i32(size), WHITE)
+}
+
+env_render :: proc(env: ^Environment, allocator := context.allocator) {
+	using raylib
 
 	if !env.document_is_loaded do return
 	#partial switch env.document.status {
@@ -253,4 +250,5 @@ env_render :: proc(env: ^Environment, allocator := context.allocator) {
 	case:
 		env_render_document_error(env, allocator)
 	}
+	if env.is_debug do env_render_debug(env, allocator)
 }
