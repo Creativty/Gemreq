@@ -1,4 +1,4 @@
-package gemini
+package gemreq
 
 import "core:strings"
 import "vendor:raylib"

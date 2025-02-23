@@ -1,4 +1,4 @@
-package gemini
+package gemreq
 
 import "core:os"
 import "core:fmt"
@@ -29,26 +29,20 @@ main :: proc() {
 		}
 	}
 
-	env: Environment
-	env.history = make([dynamic]Gemini_Endpoint)
-	defer env_delete(&env)
-
-	env_history_navigate_absolute(&env, "geminiprotocol.net")
-	if env.document.status != .Success || len(env.document.elements) == 0 do os.exit(1)
-
 	// Initialize raylib
 	using raylib
 	SetTraceLogLevel(.WARNING)
-	SetTargetFPS(60)
 	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT })
 
 	// Startup window
 	InitWindow(i32(WIDTH), i32(HEIGHT), "Gemreq")
 	SetExitKey(.KEY_NULL)
 
-	// Load fonts
-	env_load_fonts(&env)
-	defer env_unload_fonts(&env)
+	env := env_make()
+	defer env_delete(&env)
+
+	env_history_navigate_absolute(&env, "geminiprotocol.net")
+	if env.document.status != .Success || len(env.document.elements) == 0 do os.exit(1)
 
 	for !WindowShouldClose() {
 		env_update(&env)
