@@ -31,12 +31,13 @@ main :: proc() {
 
 	// Initialize raylib
 	using raylib
+	SetTargetFPS(60)
 	SetTraceLogLevel(.WARNING)
 	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT })
 
 	// Startup window
 	InitWindow(i32(WIDTH), i32(HEIGHT), "Gemreq")
-	SetExitKey(.KEY_NULL)
+	SetExitKey(.ESCAPE)
 
 	env := env_make()
 	defer env_delete(&env)

@@ -66,6 +66,12 @@ env_update :: proc(env: ^Gemreq) {
 	if !env.document_is_loaded do return
 
 	env.scroll			 = math.lerp(env.scroll, env.scroll_target, SCROLL_TAUX)
+
+	key_scroll_up		:= IsKeyPressed(.PAGE_UP)
+	key_scroll_down		:= IsKeyPressed(.PAGE_DOWN)
+	if key_scroll_up do env.scroll_target -= SCROLL_SPEED * 10
+	if key_scroll_down do env.scroll_target += SCROLL_SPEED * 10
+
 	env.scroll_target	-= GetMouseWheelMove() * SCROLL_SPEED
 	env.scroll_target	 = math.max(env.scroll_target, 0)
 
