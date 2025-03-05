@@ -53,20 +53,35 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 		}
 
 		key_goto := raylib.IsKeyPressed(.ENTER)
-		key_left := raylib.IsKeyPressed(.LEFT) || raylib.IsKeyPressedRepeat(.LEFT)
-		key_right := raylib.IsKeyPressed(.RIGHT) || raylib.IsKeyPressedRepeat(.RIGHT)
-		key_delete := raylib.IsKeyPressed(.BACKSPACE) || raylib.IsKeyPressedRepeat(.BACKSPACE)
 		key_control := raylib.IsKeyDown(.LEFT_CONTROL) || raylib.IsKeyDown(.RIGHT_CONTROL)
 
 		if key_goto {
+			url := strings.to_string(omnibar.builder)
+			if key_control && len(strings.trim_space(url)) > 0 {
+				DOMAINS :: []string{ ".com", ".net", ".io", ".dev", "." }
+				must_add_domain := true
+				for domain in DOMAINS {
+					if strings.has_suffix(url, domain) {
+						must_add_domain = false
+						break
+					}
+				}
+				if must_add_domain do edit.input_text(&omnibar.state, ".net")
+
+				PROTOCOL :: "gemini://"
+				must_add_protocol := !strings.has_prefix(url, PROTOCOL)
+				if must_add_protocol do edit.insert(&omnibar.state, 0, PROTOCOL)
+			}
 			omnibar.disabled = true
-			return
+		} else {
+			key_left := raylib.IsKeyPressed(.LEFT) || raylib.IsKeyPressedRepeat(.LEFT)
+			key_right := raylib.IsKeyPressed(.RIGHT) || raylib.IsKeyPressedRepeat(.RIGHT)
+			key_delete := raylib.IsKeyPressed(.BACKSPACE) || raylib.IsKeyPressedRepeat(.BACKSPACE)
+
+			if key_left		do edit.move_to(&omnibar.state, .Word_Left if key_control else .Left)
+			if key_right	do edit.move_to(&omnibar.state, .Word_Right if key_control else .Right)
+			if key_delete	do edit.delete_to(&omnibar.state, .Word_Left if key_control else .Left)
 		}
-
-		if key_left		do edit.move_to(&omnibar.state, .Word_Left if key_control else .Left)
-		if key_right	do edit.move_to(&omnibar.state, .Word_Right if key_control else .Right)
-		if key_delete	do edit.delete_to(&omnibar.state, .Word_Left if key_control else .Left)
-
 		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, 0.3)
 	}
 }
@@ -84,14 +99,14 @@ draw_omnibar :: proc(browser: ^Browser) {
 	DrawRectangleRoundedLinesEx(pad(input_frame, { 1.5, 1.5 }), 0.6, 16, 2.0, GRAY)
 
 	text := strings.to_cstring(&omnibar.builder)
-	spacing := f32(1.0)
+	spacing := f32(1.2)
 	font_size := Font_Size.Large
 	font_size_i32 := cast(f32)font_size_int(font_size)
 
 	font := browser.fonts[FONT_SANS_BOLD][font_size]
 	text_measure := MeasureTextEx(font, text, font_size_i32, spacing)
 
-	text_area := pad(input_frame, [2]f32{ (text_measure.y - input_height) / 2, (text_measure.y - input_height) / 2  })
+	text_area := pad(input_frame, [2]f32{ 1, 1 } * (text_measure.y - input_height) / 2)
 	DrawTextEx(font, text, { text_area.x, text_area.y }, font_size_i32, spacing, GetColor(0x5f5f5aff if omnibar.disabled else 0x292929FF))
 
 	if !omnibar.disabled {
@@ -100,6 +115,6 @@ draw_omnibar :: proc(browser: ^Browser) {
 		defer delete(text)
 
 		text_measure := MeasureTextEx(font, text, font_size_i32, spacing)
-		DrawRectangle(cast(i32)(text_area.x + text_measure.x * (omnibar.caret / cast(f32)omnibar.state.selection.x) + 0.5), cast(i32)text_area.y, 2, cast(i32)text_measure.y, RED)
+		DrawRectangle(cast(i32)(text_area.x + text_measure.x * (omnibar.caret / cast(f32)omnibar.state.selection.x) + 0.8), cast(i32)text_area.y, 1, cast(i32)text_measure.y, GetColor(0x292929ff))
 	}
 }
