@@ -48,19 +48,27 @@ unload :: proc(browser: ^Browser) {
 
 navigate :: proc(browser: ^Browser, url: string) {
 	// TODO(XENOBAS): move this into its own thread
-	browser.omnibar.disabled = true
-	defer browser.omnibar.disabled = false
+	omnibar := &browser.omnibar
+
+	omnibar.disabled = true
+	defer omnibar.disabled = false
+
+	if error_string, has_error := omnibar.error.(cstring); has_error {
+		delete(error_string)
+		omnibar.error = nil
+	}
 
 	ep := parse_endpoint(url)
 	defer delete_endpoint(ep)
 
 	resp, err := gemini_request(ep)
 	if err != nil {
-		fmt.eprintfln("gemreq: error: during navigation to %v with reason: %v", ep, err)
+		omnibar.error = fmt.caprintf("%v", err)
 		return
 	}
 	
 	document := gemini_parse(resp)
+	fmt.printfln("%#v", document)
 }
 
 update :: proc(browser: ^Browser, dt: f64) {

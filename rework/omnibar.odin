@@ -14,6 +14,7 @@ Omnibar :: struct {
 	builder: strings.Builder,
 
 	caret: f32,
+	error: Maybe(cstring),
 }
 
 launch_omnibar :: proc(omnibar: ^Omnibar) {
@@ -107,28 +108,41 @@ draw_omnibar :: proc(browser: ^Browser) {
 
 	omnibar := &browser.omnibar
 
+	// Frame
 	input_height := f32(48)
 	input_frame := Rectangle{ WINDOW_PAD_X, WINDOW_PAD_Y, VIEW_WIDTH, input_height }
 	DrawRectangleRounded(input_frame, 0.6, 16, GetColor(0xe6e6e6ff) if omnibar.disabled else WHITE)
 	DrawRectangleRoundedLinesEx(pad(input_frame, { 1.5, 1.5 }), 0.6, 16, 2.0, GRAY)
 
+	// Text
 	text := strings.to_cstring(&omnibar.builder)
 	spacing := f32(1.2)
 	font_size := Font_Size.Large
-	font_size_i32 := cast(f32)font_size_int(font_size)
+	font_size_f32 := cast(f32)font_size_int(font_size)
 
 	font := browser.fonts[FONT_SANS_BOLD][font_size]
-	text_measure := MeasureTextEx(font, text, font_size_i32, spacing)
+	text_measure := MeasureTextEx(font, text, font_size_f32, spacing)
 
 	text_area := pad(input_frame, [2]f32{ 1, 1 } * (text_measure.y - input_height) / 2)
-	DrawTextEx(font, text, { text_area.x, text_area.y }, font_size_i32, spacing, GetColor(0x5f5f5aff if omnibar.disabled else 0x292929FF))
+	DrawTextEx(font, text, { text_area.x, text_area.y }, font_size_f32, spacing, GetColor(0x5f5f5aff if omnibar.disabled else 0x292929FF))
 
+	// Error
+	if error_text, error_present := omnibar.error.(cstring); error_present {
+		error_size := Font_Size.Small
+		error_font := browser.fonts[FONT_SANS_BOLD][error_size]
+		error_spacing := f32(16)
+		error_size_f32 := cast(f32)font_size_int(error_size)
+		error_position := [2]f32{ WINDOW_PAD_X, input_frame.y + input_frame.height + error_spacing }
+		DrawTextEx(error_font, error_text, error_position, error_size_f32, 1.0, GetColor(0xFF0033FF))
+	}
+
+	// Caret
 	if !omnibar.disabled {
 		text_slice := strings.to_string(omnibar.builder)[:omnibar.state.selection.x]
 		text := strings.clone_to_cstring(text_slice)
 		defer delete(text)
 
-		text_measure := MeasureTextEx(font, text, font_size_i32, spacing)
+		text_measure := MeasureTextEx(font, text, font_size_f32, spacing)
 		DrawRectangle(cast(i32)(text_area.x + text_measure.x * (omnibar.caret / cast(f32)omnibar.state.selection.x) + 0.8), cast(i32)text_area.y, 1, cast(i32)text_measure.y, GetColor(0x292929ff))
 	}
 }
