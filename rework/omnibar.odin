@@ -88,7 +88,7 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 			if key_left		do edit.move_to(&omnibar.state, .Word_Left if key_control else .Left)
 			if key_right	do edit.move_to(&omnibar.state, .Word_Right if key_control else .Right)
 			if key_delete	do edit.delete_to(&omnibar.state, .Word_Left if key_control else .Left)
-			if key_paste {
+			if key_paste && key_control {
 				text, ok := clipboard_get()
 				defer delete(text)
 
