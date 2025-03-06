@@ -99,12 +99,12 @@ _gemini_request_ssl_destroy :: proc(ctx: ssl.SSL_CTX, inst: ssl.SSL) {
 _gemini_request_write :: proc(ep: Endpoint, request: ^strings.Builder) {
 	strings.write_string(request, PROTOCOL)
 	strings.write_string(request, ep.host)
-	strings.write_string(request, ":")
-	strings.write_int(request, ep.port)
 	strings.write_string(request, "/")
-	for level in ep.path {
-		strings.write_string(request, level)
-		if !strings.has_suffix(level, ".gmi") do strings.write_string(request, "/")
+	if len(ep.path) > 0 {
+		path := strings.join(ep.path[:], "/")
+		strings.write_string(request, path)
+		if !strings.has_suffix(path, ".gmi") do strings.write_string(request, "/")
+		delete(path)
 	}
 	strings.write_string(request, "\r\n")
 
@@ -169,6 +169,9 @@ gemini_parse :: proc(src: string) -> (document: Document) {
 	reader_skip_whitespace(&r)
 	rest := reader_read_delimiter(&r, "\r\n")
 
-	fmt.println(status, rest)
+	if status >= 20 && status <= 29 {
+		fmt.println(r.buffer[:])
+	}
+
 	return
 }
