@@ -161,8 +161,7 @@ Document :: struct {
 	gemtext: [dynamic]Gemtext,
 }
 
-parse_document :: proc(source: string, do_clone := false) -> (document: Document) {
-
+parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> (document: Document) {
 	document.source = strings.clone(source) if do_clone else source
 	document.gemtext = make([dynamic]Gemtext)
 
@@ -178,8 +177,20 @@ parse_document :: proc(source: string, do_clone := false) -> (document: Document
 	for !reader_eof(&r) {
 		line := reader_read_delimiter(&r, "\n")
 		element := gemtext_parse(line, in_preformat)
-		if element.kind == .Preformatting_Delimiter do in_preformat = !in_preformat
-		append(&document.gemtext, element)
+		switch element.kind {
+		case .Text, .Blockquote, .List, .Heading_1, .Heading_2, .Heading_3:
+			config := gemtext_wrap_config(browser, element.kind)
+			lines := text_wrap(browser, element.data.(string), config, VIEW_WIDTH)
+			for line in lines do append(&document.gemtext, Gemtext{ element.kind, line })
+		case .Link:
+			config := gemtext_wrap_config(browser, .Link)
+			element := element.data.(Gemtext_Link)
+			lines := text_wrap(browser, element.text, config, VIEW_WIDTH)
+			for line in lines do append(&document.gemtext, Gemtext{ .Link, Gemtext_Link{ line, element.url } })
+		case .Empty, .Preformatting_Delimiter:
+			if element.kind == .Preformatting_Delimiter do in_preformat = !in_preformat
+			append(&document.gemtext, element)
+		}
 	}
 	return
 }

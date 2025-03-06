@@ -29,6 +29,19 @@ Gemtext :: struct {
 	data: Gemtext_Data,
 }
 
+// TODO(XENOBAS): Rename this function
+gemtext_wrap_config :: proc(browser: ^Browser, kind: Gemtext_Kind) -> Wrap_Config {
+	#partial switch kind {
+	case .Heading_1, .Heading_2:
+		return { FONT_SANS_BOLD, .Extra_Large, 1.2, color_text }
+	case .Heading_3:
+		return { FONT_SANS_BOLD, .Large, 1.2, color_text }
+	case .Link:
+		return { FONT_SANS_BOLD, .Regular, 1.0, color_link }
+	}
+	return { FONT_SANS_REGULAR, .Regular, 1.0, color_text }
+}
+
 gemtext_parse :: proc(src: string, preformatted := false) -> Gemtext {
 	if !preformatted {
 		switch {
@@ -68,4 +81,10 @@ gemtext_parse :: proc(src: string, preformatted := false) -> Gemtext {
 		return { .Preformatting_Delimiter, nil }
 	}
 	return { .Text, src }
+}
+
+gemtext_get_text :: proc(gemtext: Gemtext) -> string {
+	if gemtext.kind == .Link do return gemtext.data.(Gemtext_Link).text
+	if gemtext.kind == .Empty || gemtext.kind == .Preformatting_Delimiter do return ""
+	return gemtext.data.(string)
 }

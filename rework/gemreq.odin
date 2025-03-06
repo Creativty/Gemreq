@@ -11,10 +11,14 @@ WINDOW_PAD_X	:: 32
 WINDOW_PAD_Y	:: 16
 
 VIEW_WIDTH		:: 500
-VIEW_HEIGHT		:: 500
+VIEW_HEIGHT		:: 640
 
 WINDOW_WIDTH	:: (WINDOW_PAD_X * 2) + VIEW_WIDTH
 WINDOW_HEIGHT	:: (WINDOW_PAD_Y * 2) + VIEW_HEIGHT
+
+color_text := raylib.GetColor(0xE8EAEDFF)
+color_link := raylib.GetColor(0x4C97FFFF)
+color_background := raylib.GetColor(0x101218FF)
 
 Browser :: struct {
 	fonts: map[string]Font_Asset,
@@ -67,19 +71,11 @@ navigate :: proc(browser: ^Browser, url: string) {
 		return
 	}
 	
-	document := parse_document(resp)
-	config := Wrap_Config{ browser.fonts[FONT_SANS_REGULAR][.Regular], .Regular, 1.0 }
-	for element in document.gemtext {
-		if element.kind == .Text {
-			wrapped := text_wrap(element.data.(string), config, VIEW_WIDTH)
-			fmt.printfln("%#v", wrapped)
-			delete(wrapped)
-			break
-		}
-	}
+	document := parse_document(browser, resp)
 
 	if doc_old, doc_exists := browser.document.(Document); doc_exists do delete_document(doc_old)
 	browser.document = document
+	omnibar.visible = false
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
@@ -92,6 +88,7 @@ update :: proc(browser: ^Browser, dt: f64) {
 draw :: proc(browser: ^Browser) {
 	using raylib
 
+	ClearBackground(color_background)
 	if document, exists := browser.document.(Document); exists {
 		draw_document(browser, document)
 	}
@@ -102,14 +99,35 @@ draw :: proc(browser: ^Browser) {
 }
 
 draw_document :: proc(browser: ^Browser, document: Document) {
+	if document.status != 20 do return
+	offset_y := f32(0)
+	config_empty := gemtext_wrap_config(browser, .Empty)
+	for node in document.gemtext {
+		if node.kind == .Empty || node.kind == .Preformatting_Delimiter {
+			offset_y += font_size_float(config_empty.font_size)
+			continue
+		}
+
+		config := gemtext_wrap_config(browser, node.kind)
+		repr := gemtext_get_text(node)
+		text := strings.clone_to_cstring(repr, context.temp_allocator)
+		size := font_size_float(config.font_size)
+		font := browser.fonts[config.font_name][config.font_size]
+		measure := raylib.MeasureTextEx(font, text, size, config.spacing)
+		offset_y += measure.y
+		raylib.DrawTextEx(font, text, { WINDOW_PAD_X, WINDOW_PAD_Y + offset_y }, size, config.spacing, config.color)
+		offset_y += font_size_float(config_empty.font_size) * 0.3
+		if offset_y > VIEW_HEIGHT do break
+	}
+	free_all(context.temp_allocator)
 }
 
 main :: proc() {
 	using raylib
 
 	SetTraceLogLevel(.WARNING)
-	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT })
 	SetTargetFPS(60)
+	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT })
 
 	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Gemreq: Gemini browser")
 	defer CloseWindow()
@@ -128,7 +146,6 @@ main :: proc() {
 		update(&browser, dt)
 
 		BeginDrawing()
-			ClearBackground(WHITE)
 			draw(&browser)
 		EndDrawing()
 	}

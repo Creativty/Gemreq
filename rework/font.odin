@@ -32,6 +32,10 @@ font_size_int :: proc(size: Font_Size) -> i32 {
 	}
 }
 
+font_size_float :: proc(size: Font_Size) -> f32 {
+	return cast(f32)font_size_int(size)
+}
+
 font_load :: proc(browser: ^Browser, name: string, path: cstring) {
 	asset: Font_Asset
 

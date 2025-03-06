@@ -43,7 +43,6 @@ unload_omnibar :: proc(omnibar: ^Omnibar) {
 
 update_omnibar :: proc(browser: ^Browser, dt: f64) {
 	omnibar := &browser.omnibar
-	if !omnibar.visible do return
 
 	if !omnibar.disabled {
 		for {
@@ -57,6 +56,9 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 		key_goto := raylib.IsKeyPressed(.ENTER)
 		key_control := raylib.IsKeyDown(.LEFT_CONTROL) || raylib.IsKeyDown(.RIGHT_CONTROL)
 
+		if key_control && raylib.IsKeyPressed(.L) {
+			omnibar.visible = !omnibar.visible || browser.document == nil
+		}
 		if key_goto {
 			url_pre_process := strings.trim_space(strings.to_string(omnibar.builder))
 			if key_control && len(url_pre_process) > 0 {
@@ -117,7 +119,7 @@ draw_omnibar :: proc(browser: ^Browser) {
 	text := strings.to_cstring(&omnibar.builder)
 	spacing := f32(1.2)
 	font_size := Font_Size.Large
-	font_size_f32 := cast(f32)font_size_int(font_size)
+	font_size_f32 := font_size_float(font_size)
 
 	font := browser.fonts[FONT_SANS_BOLD][font_size]
 	text_measure := MeasureTextEx(font, text, font_size_f32, spacing)
@@ -130,7 +132,7 @@ draw_omnibar :: proc(browser: ^Browser) {
 		error_size := Font_Size.Small
 		error_font := browser.fonts[FONT_SANS_BOLD][error_size]
 		error_spacing := f32(16)
-		error_size_f32 := cast(f32)font_size_int(error_size)
+		error_size_f32 := font_size_float(error_size)
 		error_position := [2]f32{ WINDOW_PAD_X, input_frame.y + input_frame.height + error_spacing }
 		DrawTextEx(error_font, error_text, error_position, error_size_f32, 1.0, GetColor(0xFF0033FF))
 	}
