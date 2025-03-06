@@ -87,7 +87,6 @@ reader_read_int :: proc(r: ^Reader) -> (n: int) {
 }
 
 reader_read_delimiter :: proc(r: ^Reader, delimiter: string) -> (token: string) {
-
 	r.index_last = r.index_curr
 	for !reader_eof(r) {
 		if strings.has_prefix(r.buffer[r.index_curr:], delimiter) do break
@@ -96,7 +95,25 @@ reader_read_delimiter :: proc(r: ^Reader, delimiter: string) -> (token: string) 
 	token = reader_consume(r)
 
 	if strings.has_prefix(r.buffer[r.index_curr:], delimiter) {
-		for i in 0..<len(delimiter) do reader_next(r)
+		for i in 0..<len(delimiter) {
+			reader_next(r)
+		}
 	}
+	return token
+}
+
+reader_read_delimiter_whitespace :: proc(r: ^Reader) -> (token: string) {
+	is_whitespace :: proc(_: int, c: rune) -> bool {
+		return c == ' ' || c == '\t' || c == '\f' || c == '\v'
+	}
+	is_not_whitespace :: proc(_: int, c: rune) -> bool {
+		return c != ' ' && c != '\t' && c != '\f' && c != '\v'
+	}
+
+	r.index_last = r.index_curr
+	reader_next_while(r, is_not_whitespace)
+	token = reader_consume(r)
+
+	reader_next_while(r, is_whitespace)
 	return token
 }

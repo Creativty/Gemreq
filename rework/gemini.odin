@@ -156,22 +156,30 @@ gemini_request :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) {
 }
 
 Document :: struct {
-	body: []u8,
 	status: int,
-	location: Maybe(string),
-	media_type: Maybe(string),
+	source: string,
+	gemtext: [dynamic]Gemtext,
 }
 
-gemini_parse :: proc(src: string) -> (document: Document) {
-	r := reader_make(src)
+gemini_parse :: proc(source: string, do_clone := false) -> (document: Document) {
 
-	status := reader_read_int(&r)
+	document.source = strings.clone(source) if do_clone else source
+	document.gemtext = make([dynamic]Gemtext)
+
+	r := reader_make(document.source)
+	document.status = reader_read_int(&r)
+	assert(document.status == 20, "TODO: implement other status codes.")
+
 	reader_skip_whitespace(&r)
-	rest := reader_read_delimiter(&r, "\r\n")
+	mime := reader_read_delimiter(&r, "\r\n")
+	assert(mime == "text/gemini", "TODO: implement other media types.")
 
-	if status >= 20 && status <= 29 {
-		fmt.println(r.buffer[:])
+	in_preformat := false
+	for !reader_eof(&r) {
+		line := reader_read_delimiter(&r, "\n")
+		element := gemtext_parse(line, in_preformat)
+		if element.kind == .Preformatting_Delimiter do in_preformat = !in_preformat
+		append(&document.gemtext, element)
 	}
-
 	return
 }
