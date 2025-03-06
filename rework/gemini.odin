@@ -6,6 +6,7 @@ import "core:c"
 import "core:fmt"
 import "core:mem"
 import "core:net"
+import "core:time"
 import "core:strconv"
 import "core:strings"
 import "core:sys/posix"
@@ -162,6 +163,9 @@ Document :: struct {
 }
 
 parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> (document: Document) {
+	timing: time.Stopwatch
+
+	time.stopwatch_start(&timing)
 	document.source = strings.clone(source) if do_clone else source
 	document.gemtext = make([dynamic]Gemtext)
 
@@ -192,6 +196,11 @@ parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> 
 			append(&document.gemtext, element)
 		}
 	}
+	time.stopwatch_stop(&timing)
+
+	timing_duration := time.stopwatch_duration(timing)
+	fmt.printfln("gemreq: debug: parse_document took %v.", timing_duration)
+
 	return
 }
 

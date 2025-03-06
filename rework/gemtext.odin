@@ -48,11 +48,11 @@ gemtext_parse :: proc(src: string, preformatted := false) -> Gemtext {
 		case len(src) == 0:
 			return { .Empty, nil }
 		case strings.has_prefix(src, ">"):
-			return { .Blockquote, src[1:] }
+			return { .Blockquote, strings.trim_space(src[1:]) }
 		case strings.has_prefix(src, ">"):
-			return { .Blockquote, src[1:] }
+			return { .Blockquote, strings.trim_space(src[1:]) }
 		case strings.has_prefix(src, "* "):
-			return { .List, src[2:] }
+			return { .List, strings.trim_space(src[2:]) }
 		case strings.has_prefix(src, "```"):
 			return { .Preformatting_Delimiter, nil }
 		case strings.has_prefix(src, "=>"):
@@ -70,17 +70,17 @@ gemtext_parse :: proc(src: string, preformatted := false) -> Gemtext {
 
 			return e
 		case strings.has_prefix(src, "###"):
-			return { .Heading_3, src[3:] }
+			return { .Heading_3, strings.trim_space(src[3:]) }
 		case strings.has_prefix(src, "##"):
-			return { .Heading_2, src[2:] }
+			return { .Heading_2, strings.trim_space(src[2:]) }
 		case strings.has_prefix(src, "#"):
-			return { .Heading_1, src[1:] }
+			return { .Heading_1, strings.trim_space(src[1:]) }
 		}
 	}
 	if strings.has_prefix(src, "```") {
 		return { .Preformatting_Delimiter, nil }
 	}
-	return { .Text, src }
+	return { .Text, strings.trim_space(src) }
 }
 
 gemtext_get_text :: proc(gemtext: Gemtext) -> string {

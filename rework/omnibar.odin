@@ -15,6 +15,7 @@ Omnibar :: struct {
 	builder: strings.Builder,
 
 	caret: f32,
+	caret_time: f64,
 	error: Maybe(cstring),
 }
 
@@ -28,6 +29,8 @@ launch_omnibar :: proc(omnibar: ^Omnibar) {
 	omnibar.disabled = false
 
 	edit.input_text(&omnibar.state, "gemini://geminiprotocol.net")
+
+	// NOTE(XENOBAS): WHY THE FUCK DID I DIVIDE BY 2 ?!?
 	omnibar.caret = cast(f32)omnibar.state.selection.x / 2
 }
 
@@ -58,6 +61,7 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 
 		if key_control && raylib.IsKeyPressed(.L) {
 			omnibar.visible = !omnibar.visible || browser.document == nil
+			omnibar.caret_time = raylib.GetTime()
 		}
 		if key_goto {
 			url_pre_process := strings.trim_space(strings.to_string(omnibar.builder))
@@ -80,24 +84,25 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 
 			url_post_process := strings.trim_space(strings.to_string(omnibar.builder))
 			navigate(browser, url_post_process)
-
-			return
 		} else {
 			key_left := raylib.IsKeyPressed(.LEFT) || raylib.IsKeyPressedRepeat(.LEFT)
 			key_right := raylib.IsKeyPressed(.RIGHT) || raylib.IsKeyPressedRepeat(.RIGHT)
 			key_delete := raylib.IsKeyPressed(.BACKSPACE) || raylib.IsKeyPressedRepeat(.BACKSPACE)
-			key_paste := raylib.IsKeyPressed(.V)
+			key_paste := raylib.IsKeyPressed(.V) && key_control
 
 			if key_left		do edit.move_to(&omnibar.state, .Word_Left if key_control else .Left)
 			if key_right	do edit.move_to(&omnibar.state, .Word_Right if key_control else .Right)
 			if key_delete	do edit.delete_to(&omnibar.state, .Word_Left if key_control else .Left)
-			if key_paste && key_control {
+			if key_paste {
 				text, ok := clipboard_get()
 				defer delete(text)
 
 				if ok {
 					edit.input_text(&omnibar.state, text)
 				} else do fmt.eprintln("gemreq: error: could not read from clipboard.")
+			}
+			if key_left || key_right || key_delete || key_paste {
+				omnibar.caret_time = raylib.GetTime()
 			}
 		}
 		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, 0.3)
@@ -108,6 +113,9 @@ draw_omnibar :: proc(browser: ^Browser) {
 	using raylib
 
 	omnibar := &browser.omnibar
+
+	// Background
+	DrawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, ColorAlpha(color_background, 0.6))
 
 	// Frame
 	input_height := f32(48)
@@ -139,11 +147,13 @@ draw_omnibar :: proc(browser: ^Browser) {
 
 	// Caret
 	if !omnibar.disabled {
+		time := GetTime() - omnibar.caret_time
+		color := ColorAlpha(GetColor(0x292929ff), cast(f32)math.cos(time * 5))
 		text_slice := strings.to_string(omnibar.builder)[:omnibar.state.selection.x]
 		text := strings.clone_to_cstring(text_slice)
 		defer delete(text)
 
 		text_measure := MeasureTextEx(font, text, font_size_f32, spacing)
-		DrawRectangle(cast(i32)(text_area.x + text_measure.x * (omnibar.caret / cast(f32)omnibar.state.selection.x) + 0.8), cast(i32)text_area.y, 1, cast(i32)text_measure.y, GetColor(0x292929ff))
+		DrawRectangle(cast(i32)(text_area.x + text_measure.x * (omnibar.caret / cast(f32)omnibar.state.selection.x)), cast(i32)text_area.y, 2, cast(i32)text_measure.y, color)
 	}
 }
