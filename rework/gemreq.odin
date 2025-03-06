@@ -68,9 +68,18 @@ navigate :: proc(browser: ^Browser, url: string) {
 	}
 	
 	document := parse_document(resp)
+	config := Wrap_Config{ browser.fonts[FONT_SANS_REGULAR][.Regular], .Regular, 1.0 }
+	for element in document.gemtext {
+		if element.kind == .Text {
+			wrapped := text_wrap(element.data.(string), config, VIEW_WIDTH)
+			fmt.printfln("%#v", wrapped)
+			delete(wrapped)
+			break
+		}
+	}
+
 	if doc_old, doc_exists := browser.document.(Document); doc_exists do delete_document(doc_old)
 	browser.document = document
-	fmt.printfln("%#v", document)
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
@@ -83,11 +92,13 @@ update :: proc(browser: ^Browser, dt: f64) {
 draw :: proc(browser: ^Browser) {
 	using raylib
 
+	if document, exists := browser.document.(Document); exists {
+		draw_document(browser, document)
+	}
 	if browser.omnibar.visible {
 		DrawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GetColor(0x0000002f))
 		draw_omnibar(browser)
-		return
-	} else do draw_document(browser, browser.document.(Document))
+	}
 }
 
 draw_document :: proc(browser: ^Browser, document: Document) {

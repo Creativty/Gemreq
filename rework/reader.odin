@@ -68,8 +68,13 @@ reader_skip_whitespace :: proc(r: ^Reader) -> (n: int) {
 }
 
 reader_consume :: proc(r: ^Reader) -> (token: string) {
-	token = r.buffer[r.index_last:][:r.index_curr - r.index_last]
+	token = reader_peek_token(r)
 	r.index_last = r.index_curr
+	return token
+}
+
+reader_peek_token :: proc(r: ^Reader) -> (token: string) {
+	token = r.buffer[r.index_last:][:r.index_curr - r.index_last]
 	return token
 }
 
