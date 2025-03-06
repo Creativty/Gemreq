@@ -1,5 +1,6 @@
 package gemreq
 
+import "core:fmt"
 import "core:math"
 import "core:strings"
 import "core:text/edit"
@@ -100,8 +101,6 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, 0.3)
 	}
 }
-
-import "core:fmt"
 
 draw_omnibar :: proc(browser: ^Browser) {
 	using raylib

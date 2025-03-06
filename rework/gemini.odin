@@ -13,11 +13,6 @@ import "core:sys/posix"
 GEMINI :: "gemini"
 PROTOCOL :: GEMINI + "://"
 
-Gemini_Error :: union #shared_nil {
-	net.Network_Error,
-	cstring,
-}
-
 Endpoint :: struct {
 	host: string,
 	path: [dynamic]string,
@@ -70,7 +65,12 @@ delete_endpoint :: proc(ep: Endpoint) {
 	delete(ep.host)
 }
 
-_gemini_request_ssl_init :: proc(sock: net.Socket) -> (ctx: ssl.SSL_CTX, inst: ssl.SSL, err: cstring) {
+Gemini_Error :: union #shared_nil {
+	net.Network_Error,
+	cstring,
+}
+
+_request_ssl_init :: proc(sock: net.Socket) -> (ctx: ssl.SSL_CTX, inst: ssl.SSL, err: cstring) {
 	// SSL context
 	ctx = ssl.SSL_CTX_new(ssl.TLS_client_method())
 	if ctx == nil do return nil, nil, posix.strerror(posix.errno())
@@ -91,12 +91,12 @@ _gemini_request_ssl_init :: proc(sock: net.Socket) -> (ctx: ssl.SSL_CTX, inst: s
 	return ctx, inst, nil
 }
 
-_gemini_request_ssl_destroy :: proc(ctx: ssl.SSL_CTX, inst: ssl.SSL) {
+_request_ssl_destroy :: proc(ctx: ssl.SSL_CTX, inst: ssl.SSL) {
 	ssl.SSL_free(inst)
 	ssl.SSL_CTX_free(ctx)
 }
 
-_gemini_request_write :: proc(ep: Endpoint, request: ^strings.Builder) {
+_request_write :: proc(ep: Endpoint, request: ^strings.Builder) {
 	strings.write_string(request, PROTOCOL)
 	strings.write_string(request, ep.host)
 	strings.write_string(request, "/")
@@ -111,14 +111,14 @@ _gemini_request_write :: proc(ep: Endpoint, request: ^strings.Builder) {
 	strings.write_string(request, "\r\n")
 }
 
-gemini_request :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) {
+request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) {
 	// Open backing socket
 	sock := net.dial_tcp(ep.host, ep.port) or_return
 	defer net.close(sock)
 
 	// Open secure socket
-	ssl_ctx, ssl_inst := _gemini_request_ssl_init(net.Socket(sock)) or_return
-	defer _gemini_request_ssl_destroy(ssl_ctx, ssl_inst)
+	ssl_ctx, ssl_inst := _request_ssl_init(net.Socket(sock)) or_return
+	defer _request_ssl_destroy(ssl_ctx, ssl_inst)
 
 	// Attempt connection
 	if ssl.SSL_connect(ssl_inst) < 0 {
@@ -130,7 +130,7 @@ gemini_request :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) {
 	strings.builder_init(&request_b)
 	defer strings.builder_destroy(&request_b)
 
-	_gemini_request_write(ep, &request_b)
+	_request_write(ep, &request_b)
 	request := strings.to_string(request_b)
 
 	if ssl.SSL_write(ssl_inst, raw_data(request), i32(len(request))) <= 0 {
@@ -161,7 +161,7 @@ Document :: struct {
 	gemtext: [dynamic]Gemtext,
 }
 
-gemini_parse :: proc(source: string, do_clone := false) -> (document: Document) {
+parse_document :: proc(source: string, do_clone := false) -> (document: Document) {
 
 	document.source = strings.clone(source) if do_clone else source
 	document.gemtext = make([dynamic]Gemtext)
@@ -182,4 +182,9 @@ gemini_parse :: proc(source: string, do_clone := false) -> (document: Document) 
 		append(&document.gemtext, element)
 	}
 	return
+}
+
+delete_document :: proc(document: Document) {
+	delete(document.source)
+	delete(document.gemtext)
 }

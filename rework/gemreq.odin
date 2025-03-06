@@ -53,7 +53,7 @@ navigate :: proc(browser: ^Browser, url: string) {
 	omnibar.disabled = true
 	defer omnibar.disabled = false
 
-	if error_string, has_error := omnibar.error.(cstring); has_error {
+	if error_string, error_present := omnibar.error.(cstring); error_present {
 		delete(error_string)
 		omnibar.error = nil
 	}
@@ -61,13 +61,15 @@ navigate :: proc(browser: ^Browser, url: string) {
 	ep := parse_endpoint(url)
 	defer delete_endpoint(ep)
 
-	resp, err := gemini_request(ep)
+	resp, err := request_document(ep)
 	if err != nil {
 		omnibar.error = fmt.caprintf("%v", err)
 		return
 	}
 	
-	document := gemini_parse(resp)
+	document := parse_document(resp)
+	if doc_old, doc_exists := browser.document.(Document); doc_exists do delete_document(doc_old)
+	browser.document = document
 	fmt.printfln("%#v", document)
 }
 
