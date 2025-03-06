@@ -1,7 +1,11 @@
 package gemreq
 
+import "core:fmt"
+import "core:thread"
 import "core:strings"
 import "vendor:raylib"
+
+Thread :: thread.Thread
 
 WINDOW_PAD_X	:: 32
 WINDOW_PAD_Y	:: 16
@@ -12,16 +16,13 @@ VIEW_HEIGHT		:: 500
 WINDOW_WIDTH	:: (WINDOW_PAD_X * 2) + VIEW_WIDTH
 WINDOW_HEIGHT	:: (WINDOW_PAD_Y * 2) + VIEW_HEIGHT
 
-Document :: struct {
-	status: int,
-	location: Maybe(string),
-	media_type: Maybe(string),
-}
-
 Browser :: struct {
 	fonts: map[string]Font_Asset,
 	document: Maybe(Document),
 	omnibar: Omnibar,
+	threads: struct {
+		gemini: Maybe(Thread),
+	},
 }
 
 launch :: proc(browser: ^Browser) {
@@ -35,12 +36,31 @@ launch :: proc(browser: ^Browser) {
 }
 
 unload :: proc(browser: ^Browser) {
+	if thread_gemini, ok := &browser.threads.gemini.(Thread); ok do thread.join(thread_gemini)
+
 	for _, asset in browser.fonts {
 		for font in asset do raylib.UnloadFont(font)
 	}
 
 	unload_omnibar(&browser.omnibar)
 	delete(browser.fonts)
+}
+
+navigate :: proc(browser: ^Browser, url: string) {
+	// TODO(XENOBAS): move this into its own thread
+	browser.omnibar.disabled = true
+	defer browser.omnibar.disabled = false
+
+	ep := parse_endpoint(url)
+	defer delete_endpoint(ep)
+
+	resp, err := gemini_request(ep)
+	if err != nil {
+		fmt.eprintfln("gemreq: error: during navigation to %v with reason: %v", ep, err)
+		return
+	}
+	
+	document := gemini_parse(resp)
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
@@ -54,7 +74,6 @@ draw :: proc(browser: ^Browser) {
 	using raylib
 
 	if browser.omnibar.visible {
-
 		DrawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GetColor(0x0000002f))
 		draw_omnibar(browser)
 		return

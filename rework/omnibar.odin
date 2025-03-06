@@ -56,31 +56,45 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 		key_control := raylib.IsKeyDown(.LEFT_CONTROL) || raylib.IsKeyDown(.RIGHT_CONTROL)
 
 		if key_goto {
-			url := strings.to_string(omnibar.builder)
-			if key_control && len(strings.trim_space(url)) > 0 {
-				DOMAINS :: []string{ ".com", ".net", ".io", ".dev", "." }
+			url_pre_process := strings.trim_space(strings.to_string(omnibar.builder))
+			if key_control && len(url_pre_process) > 0 {
+				PROTOCOL	:: "gemini://"
+				DOMAINS		:: []string{ ".com", ".net", ".io", ".dev", "." }
+
 				must_add_domain := true
 				for domain in DOMAINS {
-					if strings.has_suffix(url, domain) {
+					if strings.has_suffix(url_pre_process, domain) {
 						must_add_domain = false
 						break
 					}
 				}
 				if must_add_domain do edit.input_text(&omnibar.state, ".net")
 
-				PROTOCOL :: "gemini://"
-				must_add_protocol := !strings.has_prefix(url, PROTOCOL)
+				must_add_protocol := !strings.has_prefix(url_pre_process, PROTOCOL)
 				if must_add_protocol do edit.insert(&omnibar.state, 0, PROTOCOL)
 			}
-			omnibar.disabled = true
+
+			url_post_process := strings.trim_space(strings.to_string(omnibar.builder))
+			navigate(browser, url_post_process)
+
+			return
 		} else {
 			key_left := raylib.IsKeyPressed(.LEFT) || raylib.IsKeyPressedRepeat(.LEFT)
 			key_right := raylib.IsKeyPressed(.RIGHT) || raylib.IsKeyPressedRepeat(.RIGHT)
 			key_delete := raylib.IsKeyPressed(.BACKSPACE) || raylib.IsKeyPressedRepeat(.BACKSPACE)
+			key_paste := raylib.IsKeyPressed(.V)
 
 			if key_left		do edit.move_to(&omnibar.state, .Word_Left if key_control else .Left)
 			if key_right	do edit.move_to(&omnibar.state, .Word_Right if key_control else .Right)
 			if key_delete	do edit.delete_to(&omnibar.state, .Word_Left if key_control else .Left)
+			if key_paste {
+				text, ok := clipboard_get()
+				defer delete(text)
+
+				if ok {
+					edit.input_text(&omnibar.state, text)
+				} else do fmt.eprintln("gemreq: error: could not read from clipboard.")
+			}
 		}
 		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, 0.3)
 	}
