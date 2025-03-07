@@ -105,7 +105,7 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 				omnibar.caret_time = raylib.GetTime()
 			}
 		}
-		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, 0.3)
+		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, LERP_FACTOR)
 	}
 }
 

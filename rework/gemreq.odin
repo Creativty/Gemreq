@@ -7,6 +7,8 @@ import "vendor:raylib"
 
 Thread :: thread.Thread
 
+LERP_FACTOR		:: 0.3
+
 WINDOW_PAD_X	:: 32
 WINDOW_PAD_Y	:: 16
 
@@ -23,6 +25,12 @@ color_background := raylib.GetColor(0x101218FF)
 Browser :: struct {
 	fonts: map[string]Font_Asset,
 	document: Maybe(Document),
+	endpoint: Maybe(Endpoint),
+	navigate_queue: Maybe(string),
+	scroll: struct {
+		current: f64,
+		target: f64,
+	},
 	omnibar: Omnibar,
 	threads: struct {
 		gemini: Maybe(Thread),
@@ -50,7 +58,11 @@ unload :: proc(browser: ^Browser) {
 	delete(browser.fonts)
 }
 
-navigate :: proc(browser: ^Browser, url: string) {
+navigate_queue :: proc(browser: ^Browser, url: string) {
+	browser.navigate_queue = url
+}
+
+navigate_string :: proc(browser: ^Browser, url: string) {
 	// TODO(XENOBAS): move this into its own thread
 	omnibar := &browser.omnibar
 
@@ -62,8 +74,11 @@ navigate :: proc(browser: ^Browser, url: string) {
 		omnibar.error = nil
 	}
 
+	if ep_old, ep_old_present := browser.endpoint.(Endpoint); ep_old_present {
+		delete_endpoint(ep_old)
+	}
 	ep := parse_endpoint(url)
-	defer delete_endpoint(ep)
+	browser.endpoint = ep
 
 	resp, err := request_document(ep)
 	if err != nil {
@@ -73,16 +88,77 @@ navigate :: proc(browser: ^Browser, url: string) {
 	
 	document := parse_document(browser, resp)
 
-	if doc_old, doc_exists := browser.document.(Document); doc_exists do delete_document(doc_old)
+	if doc_old, doc_exists := browser.document.(Document); doc_exists {
+		browser.scroll.target = 0
+		browser.scroll.current = 0
+		delete_document(doc_old)
+	}
 	browser.document = document
 	omnibar.visible = false
+}
+
+navigate_endpoint :: proc(browser: ^Browser, ep: Endpoint) {
+	omnibar := &browser.omnibar
+
+	omnibar.disabled = true
+	defer omnibar.disabled = false
+
+	if error_string, error_present := omnibar.error.(cstring); error_present {
+		delete(error_string)
+		omnibar.error = nil
+	}
+
+	if ep_old, ep_old_present := browser.endpoint.(Endpoint); ep_old_present {
+		delete_endpoint(ep_old)
+	}
+	browser.endpoint = ep
+
+	resp, err := request_document(ep)
+	if err != nil {
+		omnibar.error = fmt.caprintf("%v", err)
+		return
+	}
+	
+	document := parse_document(browser, resp)
+
+	if doc_old, doc_exists := browser.document.(Document); doc_exists {
+		browser.scroll.target = 0
+		browser.scroll.current = 0
+		delete_document(doc_old)
+	}
+	browser.document = document
+	omnibar.visible = false
+}
+
+navigate :: proc {
+	navigate_string,
+	navigate_endpoint,
+}
+
+resolve_endpoint :: proc(browser: ^Browser, url: string)
+{
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 
+	if url, queue_filled := browser.navigate_queue.(string); queue_filled {
+		if strings.contains(url, "://") {
+			if strings.has_prefix(url, "gemini://") {
+				navigate(browser, url)
+			} else {
+				url := strings.clone_to_cstring(url)
+				defer delete(url)
+				raylib.OpenURL(url)
+			}
+		} else {
+			fmt.printfln("todo!: navigate(%s)", url)
+			resolve_endpoint(browser, url)
+		}
+		browser.navigate_queue = nil
+	}
 	update_omnibar(browser, dt)
-	// else do update_document(browser, browser.document.(Document))
+	update_document(browser, dt)
 }
 
 draw :: proc(browser: ^Browser) {
@@ -93,33 +169,13 @@ draw :: proc(browser: ^Browser) {
 		draw_document(browser, document)
 	}
 	if browser.omnibar.visible {
-		DrawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GetColor(0x0000002f))
 		draw_omnibar(browser)
 	}
-}
-
-draw_document :: proc(browser: ^Browser, document: Document) {
-	if document.status != 20 do return
-	offset_y := f32(0)
-	config_empty := gemtext_wrap_config(browser, .Empty)
-	for node in document.gemtext {
-		if node.kind == .Empty || node.kind == .Preformatting_Delimiter {
-			offset_y += font_size_float(config_empty.font_size)
-			continue
-		}
-
-		config := gemtext_wrap_config(browser, node.kind)
-		repr := gemtext_get_text(node)
-		text := strings.clone_to_cstring(repr, context.temp_allocator)
-		size := font_size_float(config.font_size)
-		font := browser.fonts[config.font_name][config.font_size]
-		measure := raylib.MeasureTextEx(font, text, size, config.spacing)
-		offset_y += measure.y
-		raylib.DrawTextEx(font, text, { WINDOW_PAD_X, WINDOW_PAD_Y + offset_y }, size, config.spacing, config.color)
-		offset_y += font_size_float(config_empty.font_size) * 0.3
-		if offset_y > VIEW_HEIGHT do break
+	when false {
+		text := fmt.ctprintf("FPS: %d", GetFPS())
+		measure := MeasureText(text, 24)
+		DrawText(text, WINDOW_WIDTH - measure - WINDOW_PAD_X, WINDOW_HEIGHT - 24 - WINDOW_PAD_Y, 24, WHITE)
 	}
-	free_all(context.temp_allocator)
 }
 
 main :: proc() {
