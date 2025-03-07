@@ -9,7 +9,8 @@ update_document :: proc(browser: ^Browser, dt: f64) {
 	document, document_is_loaded := browser.document.(Document)
 	if !document_is_loaded || browser.omnibar.visible do return
 
-	key_wheel := -cast(f64)raylib.GetMouseWheelMove() * (VIEW_HEIGHT / 10)
+	key_shift := raylib.IsKeyDown(.LEFT_SHIFT) || raylib.IsKeyDown(.RIGHT_SHIFT)
+	key_wheel := -cast(f64)raylib.GetMouseWheelMove() * (VIEW_HEIGHT / 10) * (10 if key_shift else 1)
 	browser.scroll.target += key_wheel
 	browser.scroll.target = math.max(0, browser.scroll.target)
 	browser.scroll.current = math.lerp(browser.scroll.current, browser.scroll.target, LERP_FACTOR)
@@ -40,7 +41,7 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 				if raylib.CheckCollisionPointRec(mouse, box) {
 					raylib.DrawRectangle(WINDOW_PAD_X, i32(WINDOW_PAD_Y + offset_y + measure.y), i32(measure.x), 1, color_link)
 					if raylib.IsMouseButtonPressed(.LEFT) {
-						navigate_queue(browser, node.data.(Gemtext_Link).url)
+						navigate_click(browser, node.data.(Gemtext_Link).url)
 					}
 				}
 			}

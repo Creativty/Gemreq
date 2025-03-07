@@ -24,6 +24,7 @@ color_background := raylib.GetColor(0x101218FF)
 
 Browser :: struct {
 	fonts: map[string]Font_Asset,
+	debug: bool,
 	document: Maybe(Document),
 	endpoint: Maybe(Endpoint),
 	navigate_queue: Maybe(string),
@@ -58,7 +59,7 @@ unload :: proc(browser: ^Browser) {
 	delete(browser.fonts)
 }
 
-navigate_queue :: proc(browser: ^Browser, url: string) {
+navigate_click :: proc(browser: ^Browser, url: string) {
 	browser.navigate_queue = url
 }
 
@@ -97,7 +98,7 @@ navigate_string :: proc(browser: ^Browser, url: string) {
 	omnibar.visible = false
 }
 
-navigate_endpoint :: proc(browser: ^Browser, ep: Endpoint) {
+navigate_endpoint :: proc(browser: ^Browser, ep: Endpoint, edit_history := false) {
 	omnibar := &browser.omnibar
 
 	omnibar.disabled = true
@@ -108,10 +109,12 @@ navigate_endpoint :: proc(browser: ^Browser, ep: Endpoint) {
 		omnibar.error = nil
 	}
 
-	if ep_old, ep_old_present := browser.endpoint.(Endpoint); ep_old_present {
-		delete_endpoint(ep_old)
+	if edit_history {
+		if ep_old, ep_old_present := browser.endpoint.(Endpoint); ep_old_present {
+			delete_endpoint(ep_old)
+		}
+		browser.endpoint = ep
 	}
-	browser.endpoint = ep
 
 	resp, err := request_document(ep)
 	if err != nil {
@@ -137,23 +140,42 @@ navigate :: proc {
 
 resolve_endpoint :: proc(browser: ^Browser, url: string)
 {
+	url := url
+	endpoint := &browser.endpoint.(Endpoint)
+
+	if strings.has_prefix(url, "+") do url = url[1:]
+
+	if strings.has_prefix(url, "/") {
+		for part in endpoint.path do delete(part)
+		clear(&endpoint.path)
+	}
+
+	if len(endpoint.path) > 0 && strings.has_suffix(endpoint.path[len(endpoint.path) - 1], ".gmi") {
+		delete(pop(&endpoint.path))
+	}
+
+	parts := strings.split(url, "/")
+	defer delete(parts)
+	for part in parts do append(&endpoint.path, strings.clone(part))
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 
+	key_debug := raylib.IsKeyPressed(.F3)
+	if key_debug do browser.debug = !browser.debug
 	if url, queue_filled := browser.navigate_queue.(string); queue_filled {
 		if strings.contains(url, "://") {
-			if strings.has_prefix(url, "gemini://") {
-				navigate(browser, url)
-			} else {
+			if strings.has_prefix(url, "gemini://") do navigate(browser, url)
+			else {
 				url := strings.clone_to_cstring(url)
 				defer delete(url)
+
 				raylib.OpenURL(url)
 			}
 		} else {
-			fmt.printfln("todo!: navigate(%s)", url)
 			resolve_endpoint(browser, url)
+			navigate(browser, browser.endpoint.(Endpoint))
 		}
 		browser.navigate_queue = nil
 	}
@@ -171,7 +193,7 @@ draw :: proc(browser: ^Browser) {
 	if browser.omnibar.visible {
 		draw_omnibar(browser)
 	}
-	when false {
+	if browser.debug {
 		text := fmt.ctprintf("FPS: %d", GetFPS())
 		measure := MeasureText(text, 24)
 		DrawText(text, WINDOW_WIDTH - measure - WINDOW_PAD_X, WINDOW_HEIGHT - 24 - WINDOW_PAD_Y, 24, WHITE)

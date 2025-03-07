@@ -31,6 +31,6 @@ text_wrap :: proc(browser: ^Browser, source: string, config: Wrap_Config, width:
 		reader_next(&reader)
 	}
 	free_all(context.temp_allocator)
-	if len(lines) == 0 do append(&lines, source)
+	if len(reader_peek_token(&reader)) > 0 do append(&lines, reader_consume(&reader))
 	return lines[:]
 }
