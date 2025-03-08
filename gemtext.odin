@@ -30,7 +30,7 @@ Gemtext :: struct {
 }
 
 // TODO(XENOBAS): Rename this function
-gemtext_wrap_config :: proc(browser: ^Browser, kind: Gemtext_Kind) -> Wrap_Config {
+gemtext_options :: proc(browser: ^Browser, kind: Gemtext_Kind) -> Text_Options {
 	#partial switch kind {
 	case .Heading_1, .Heading_2:
 		return { FONT_SANS_BOLD, .Extra_Large, 1.2, color_text }

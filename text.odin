@@ -4,14 +4,14 @@ import "core:fmt"
 import "core:strings"
 import "vendor:raylib"
 
-Wrap_Config :: struct {
+Text_Options :: struct {
 	font_name: string,
 	font_size: Font_Size,
 	spacing: f32,
 	color: raylib.Color,
 }
 
-text_wrap :: proc(browser: ^Browser, source: string, config: Wrap_Config, width: f64) -> []string {
+text_wrap :: proc(browser: ^Browser, source: string, config: Text_Options, width: f64) -> []string {
 	lines := make([dynamic]string)
 	reader := reader_make(source)
 	if len(source) == 0 do return lines[:]
@@ -30,7 +30,6 @@ text_wrap :: proc(browser: ^Browser, source: string, config: Wrap_Config, width:
 		if char == rune(0) do break
 		reader_next(&reader)
 	}
-	free_all(context.temp_allocator)
 	if len(reader_peek_token(&reader)) > 0 do append(&lines, reader_consume(&reader))
 	return lines[:]
 }

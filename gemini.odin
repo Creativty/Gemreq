@@ -4,6 +4,7 @@ import ssl "openssl"
 
 import "core:c"
 import "core:fmt"
+import "core:log"
 import "core:mem"
 import "core:net"
 import "core:time"
@@ -192,11 +193,13 @@ parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> 
 
 	r := reader_make(document.source)
 	document.status = reader_read_int(&r)
-	assert(document.status == 20, "TODO: implement other status codes.")
+	if document.status != 20 do log.panicf("todo: implement more status codes, received = %d", document.status)
+	log.debugf("request status %d", document.status)
 
 	reader_skip_whitespace(&r)
 	mime := reader_read_delimiter(&r, "\r\n")
-	assert(mime == "text/gemini", "TODO: implement other media types.")
+	if mime != "text/gemini" do log.panicf("todo: implement more media types, received = %s", mime)
+	log.debugf("request mime %s", mime)
 
 	in_preformat := false
 	for !reader_eof(&r) {
@@ -204,11 +207,11 @@ parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> 
 		element := gemtext_parse(line, in_preformat)
 		switch element.kind {
 		case .Text, .Blockquote, .List, .Heading_1, .Heading_2, .Heading_3:
-			config := gemtext_wrap_config(browser, element.kind)
+			config := gemtext_options(browser, element.kind)
 			lines := text_wrap(browser, element.data.(string), config, VIEW_WIDTH)
 			for line in lines do append(&document.gemtext, Gemtext{ element.kind, line })
 		case .Link:
-			config := gemtext_wrap_config(browser, .Link)
+			config := gemtext_options(browser, .Link)
 			element := element.data.(Gemtext_Link)
 			lines := text_wrap(browser, element.text, config, VIEW_WIDTH)
 			for line in lines do append(&document.gemtext, Gemtext{ .Link, Gemtext_Link{ line, element.url } })
@@ -220,7 +223,7 @@ parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> 
 	time.stopwatch_stop(&timing)
 
 	timing_duration := time.stopwatch_duration(timing)
-	fmt.printfln("gemreq: debug: parse_document took %v.", timing_duration)
+	log.debugf("parse_document took %v.", timing_duration)
 
 	return
 }

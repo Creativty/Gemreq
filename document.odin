@@ -11,6 +11,10 @@ update_document :: proc(browser: ^Browser, dt: f64) {
 
 	key_shift := raylib.IsKeyDown(.LEFT_SHIFT) || raylib.IsKeyDown(.RIGHT_SHIFT)
 	key_wheel := -cast(f64)raylib.GetMouseWheelMove() * (VIEW_HEIGHT / 10) * (10 if key_shift else 1)
+	key_scroll_up := raylib.IsKeyPressed(.PAGE_UP) || raylib.IsKeyPressedRepeat(.PAGE_UP)
+	key_scroll_down := raylib.IsKeyPressed(.PAGE_DOWN) || raylib.IsKeyPressedRepeat(.PAGE_DOWN)
+	if key_scroll_up do browser.scroll.target -= (VIEW_HEIGHT / 3 * 2)
+	if key_scroll_down do browser.scroll.target += (VIEW_HEIGHT / 3 * 2)
 	browser.scroll.target += key_wheel
 	browser.scroll.target = math.max(0, browser.scroll.target)
 	browser.scroll.current = math.lerp(browser.scroll.current, browser.scroll.target, LERP_FACTOR)
@@ -20,14 +24,15 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 	if document.status != 20 do return
 	preview: Maybe(string)
 	offset_y := f32(-browser.scroll.current)
-	config_empty := gemtext_wrap_config(browser, .Empty)
+	config_empty := gemtext_options(browser, .Empty)
+	last_kind := Gemtext_Kind.Empty
 	for node in document.gemtext {
 		if node.kind == .Empty || node.kind == .Preformatting_Delimiter {
 			offset_y += font_size_float(config_empty.font_size)
 			continue
 		}
 
-		config := gemtext_wrap_config(browser, node.kind)
+		config := gemtext_options(browser, node.kind)
 		repr := gemtext_get_text(node)
 		text := strings.clone_to_cstring(repr, context.temp_allocator)
 		size := font_size_float(config.font_size)
@@ -49,27 +54,33 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 			}
 		}
 		offset_y += measure.y
-		offset_y += font_size_float(config_empty.font_size) * 0.5
+		offset_y += font_size_float(config_empty.font_size) * 0.4
 
 		if offset_y > VIEW_HEIGHT do break
 	}
+
 	// Draw url preview
-	if url, preview_visible := preview.(string); preview_visible {
-		text := strings.clone_to_cstring(url, context.temp_allocator)
-		size := font_size_float(Font_Size.Extra_Small)
-		font := browser.fonts[FONT_SANS_REGULAR][Font_Size.Extra_Small]
-		measure := raylib.MeasureTextEx(font, text, size, 1.0)
-		padding := [2]f32{ size, size }
-		box_preview := raylib.Rectangle{
-			0,
-			WINDOW_HEIGHT - measure.y - padding.y * 2,
-			measure.x + padding.x * 2,
-			measure.y + padding.y * 2,
-		}
-		// raylib.DrawRectangleRec(box_preview, raylib.GetColor(0xF1F1F1FF))
-		raylib.DrawRectangleRec(box_preview, raylib.GetColor(0x191919FF))
-		raylib.DrawTextEx(font, text, { box_preview.x, box_preview.y } + padding, size, 1.0, color_text)
-		raylib.DrawRectangleLinesEx(box_preview, 1.0, raylib.GetColor(0x000000FF))
+	if url, url_visible := preview.(string); url_visible do draw_preview_url(browser, url)
+}
+
+draw_preview_url :: proc(browser: ^Browser, url: string) {
+	size := Font_Size.Small
+	asset := browser.fonts[FONT_SANS_REGULAR]
+	spacing := 1.0
+	size_f32 := font_size_float(size)
+	text, measure := raylib_make_text(browser, url, asset, size, spacing)
+
+	padding := [2]f32{ size_f32, size_f32 / 3.0 * 2.0 }
+	box_preview := raylib.Rectangle{
+		0,
+		WINDOW_HEIGHT - measure.y - padding.y * 2,
+		measure.x + padding.x * 2,
+		measure.y + padding.y * 2,
 	}
-	free_all(context.temp_allocator)
+	// Background
+	raylib.DrawRectangleRec(box_preview, raylib.GetColor(0x191919FF))
+	// Text
+	raylib.DrawTextEx(asset[size], text, { box_preview.x, box_preview.y } + padding, size_f32, 1.0, color_text)
+	// Border
+	raylib.DrawRectangleLinesEx(box_preview, 1.0, raylib.GetColor(0x000000FF))
 }

@@ -1,6 +1,7 @@
 package gemreq
 
 import "core:fmt"
+import "core:log"
 import "core:thread"
 import "core:strings"
 import "vendor:raylib"
@@ -50,13 +51,15 @@ launch :: proc(browser: ^Browser) {
 
 unload :: proc(browser: ^Browser) {
 	if thread_gemini, ok := &browser.threads.gemini.(Thread); ok do thread.join(thread_gemini)
+	log.debug("threads joined")
 
-	for _, asset in browser.fonts {
+	for name, asset in browser.fonts {
 		for font in asset do raylib.UnloadFont(font)
+		log.debugf("font %s unloaded", name)
 	}
+	delete(browser.fonts)
 
 	unload_omnibar(&browser.omnibar)
-	delete(browser.fonts)
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
@@ -103,12 +106,19 @@ draw :: proc(browser: ^Browser) {
 main :: proc() {
 	using raylib
 
+	context.logger = log.create_console_logger()
+	defer log.destroy_console_logger(context.logger)
+
 	SetTraceLogLevel(.WARNING)
 	SetTargetFPS(120)
 	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT })
 
 	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Gemreq: Gemini browser")
-	defer CloseWindow()
+	log.infof("window created %dx%d", WINDOW_WIDTH, WINDOW_HEIGHT)
+	defer {
+		log.info("browser loop completed")
+		CloseWindow()
+	}
 
 	SetExitKey(.KEY_NULL)
 
@@ -126,5 +136,6 @@ main :: proc() {
 		BeginDrawing()
 			draw(&browser)
 		EndDrawing()
+		free_all(context.temp_allocator)
 	}
 }

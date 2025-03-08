@@ -1,6 +1,7 @@
 package gemreq
 
 import "core:fmt"
+import "core:log"
 
 navigate_click :: proc(browser: ^Browser, url: string) {
 	browser.navigate_queue = url
@@ -13,11 +14,13 @@ navigate_string :: proc(browser: ^Browser, url: string) {
 	omnibar.disabled = true
 	defer omnibar.disabled = false
 
+	// Omnibar error clear
 	if error_string, error_present := omnibar.error.(cstring); error_present {
 		delete(error_string)
 		omnibar.error = nil
 	}
 
+	// History
 	if ep_old, ep_old_present := browser.endpoint.(Endpoint); ep_old_present {
 		delete_endpoint(ep_old)
 	}

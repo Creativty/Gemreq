@@ -1,5 +1,6 @@
 package gemreq
 
+import "core:log"
 import "vendor:raylib"
 
 FONT_SANS_BOLD		:: "sans_bold"
@@ -44,4 +45,5 @@ font_load :: proc(browser: ^Browser, name: string, path: cstring) {
 		asset[size] = LoadFontEx(path, font_size_int(size), nil, -1)
 	}
 	browser.fonts[name] = asset
+	log.debugf("font %s \"%s\" loaded", name, path)
 }

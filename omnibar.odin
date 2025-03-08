@@ -1,6 +1,7 @@
 package gemreq
 
 import "core:fmt"
+import "core:log"
 import "core:math"
 import "core:strings"
 import "core:text/edit"
@@ -31,7 +32,8 @@ launch_omnibar :: proc(omnibar: ^Omnibar) {
 	edit.input_text(&omnibar.state, "gemini://geminiprotocol.net")
 
 	// NOTE(XENOBAS): WHY THE FUCK DID I DIVIDE BY 2 ?!?
-	omnibar.caret = cast(f32)omnibar.state.selection.x / 2
+	omnibar.caret = cast(f32)omnibar.state.selection.x
+	log.debug("omnibar initialised")
 }
 
 unload_omnibar :: proc(omnibar: ^Omnibar) {
@@ -39,9 +41,10 @@ unload_omnibar :: proc(omnibar: ^Omnibar) {
 	omnibar.disabled = false
 
 	edit.end(&omnibar.state)
-
 	edit.destroy(&omnibar.state)
+
 	strings.builder_destroy(&omnibar.builder)
+	log.debug("omnibar unloaded")
 }
 
 update_omnibar :: proc(browser: ^Browser, dt: f64) {
@@ -115,24 +118,27 @@ draw_omnibar :: proc(browser: ^Browser) {
 	omnibar := &browser.omnibar
 
 	// Background
-	DrawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, ColorAlpha(color_background, 0.6))
+	DrawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, ColorAlpha(color_background, 0.4))
+
+	font_size := Font_Size.Regular
+	font_size_f32 := font_size_float(font_size)
 
 	// Frame
-	input_height := f32(48)
+	input_pad := [2]f32{ font_size_f32 * 2.0, font_size_f32 } / 2.0
+	input_height := font_size_f32 + input_pad.y * 2
 	input_frame := Rectangle{ WINDOW_PAD_X, WINDOW_PAD_Y, VIEW_WIDTH, input_height }
-	DrawRectangleRounded(input_frame, 0.6, 16, GetColor(0xe6e6e6ff) if omnibar.disabled else WHITE)
-	DrawRectangleRoundedLinesEx(pad(input_frame, { 1.5, 1.5 }), 0.6, 16, 2.0, GRAY)
+	DrawRectangleRec(input_frame, GetColor(0xE6E6E6FF) if omnibar.disabled else WHITE)
+	DrawRectangleLinesEx(input_frame, 2.0, GetColor(0xE6E6FFFF) if omnibar.disabled else GetColor(0xE6D6FFFF))
 
 	// Text
 	text := strings.to_cstring(&omnibar.builder)
 	spacing := f32(1.2)
-	font_size := Font_Size.Large
-	font_size_f32 := font_size_float(font_size)
 
 	font := browser.fonts[FONT_SANS_BOLD][font_size]
 	text_measure := MeasureTextEx(font, text, font_size_f32, spacing)
 
-	text_area := pad(input_frame, [2]f32{ 1, 1 } * (text_measure.y - input_height) / 2)
+	text_area := pad(input_frame, [2]f32{ 1.0, (text_measure.y - input_height) / 2 })
+	text_area.x += font_size_f32
 	DrawTextEx(font, text, { text_area.x, text_area.y }, font_size_f32, spacing, GetColor(0x5f5f5aff if omnibar.disabled else 0x292929FF))
 
 	// Error
