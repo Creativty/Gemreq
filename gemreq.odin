@@ -42,8 +42,8 @@ launch :: proc(browser: ^Browser) {
 	browser.document = nil
 
 	browser.fonts = make(map[string]Font_Asset)
-	font_load(browser, FONT_SANS_REGULAR, "../font/ttf/DejaVuSans.ttf")
-	font_load(browser, FONT_SANS_BOLD, "../font/ttf/DejaVuSans-Bold.ttf")
+	font_load(browser, FONT_SANS_REGULAR, "font/ttf/DejaVuSans.ttf")
+	font_load(browser, FONT_SANS_BOLD, "font/ttf/DejaVuSans-Bold.ttf")
 
 	launch_omnibar(&browser.omnibar)
 }

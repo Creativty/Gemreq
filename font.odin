@@ -2,29 +2,46 @@ package gemreq
 
 import "vendor:raylib"
 
-Font	:: raylib.Font
-Color	:: raylib.Color
+FONT_SANS_BOLD		:: "sans_bold"
+FONT_SANS_REGULAR	:: "sans_regular"
 
-Font_Style :: enum {
-	Bold,
-	Italic,
-	Bold_Italic,
-	Paragraph,
-	Heading_1,
-	Heading_2,
-	Heading_3,
+Font_Size :: enum {
+	Extra_Small,
+	Small,
+	Regular,
+	Large,
+	Extra_Large,
 }
 
-Font_Collection :: [Font_Style]Font
+Font_Asset :: [Font_Size]raylib.Font
 
-font_style_from_element :: proc(element_generic: Gemini_Element) -> Font_Style {
-	switch element in element_generic {
-	case Gemini_Element_Link:
-		return .Bold_Italic
-	case Gemini_Element_Text:
-		if element.heading == 1 do return .Heading_1
-		if element.heading == 2 do return .Heading_2
-		if element.heading == 3 do return .Heading_3
+font_size_int :: proc(size: Font_Size) -> i32 {
+	switch (size) {
+	case .Extra_Small:
+		return 8
+	case .Small:
+		return 12
+	case .Regular:
+		return 16
+	case .Large:
+		return 20
+	case .Extra_Large:
+		return 24
+	case:
+		return 16
 	}
-	return .Paragraph
+}
+
+font_size_float :: proc(size: Font_Size) -> f32 {
+	return cast(f32)font_size_int(size)
+}
+
+font_load :: proc(browser: ^Browser, name: string, path: cstring) {
+	asset: Font_Asset
+
+	for _, size in asset {
+		using raylib
+		asset[size] = LoadFontEx(path, font_size_int(size), nil, -1)
+	}
+	browser.fonts[name] = asset
 }
