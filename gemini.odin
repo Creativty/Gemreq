@@ -191,16 +191,22 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 	return response, nil
 }
 
+Element :: struct {
+	size: [2]f32,
+	offset: f32,
+	gemtext: Gemtext,
+}
+
 Document :: struct {
 	status: int,
 	source: string,
-	bounds: [2]f32,
-	gemtext: [dynamic]Gemtext,
+	height: f32,
+	elements: [dynamic]Element,
 }
 
 parse_document :: proc(browser: ^Browser, source: string, source_do_clone := false) -> (document: Document) {
 	document.source = strings.clone(source) if source_do_clone else source
-	document.gemtext = make([dynamic]Gemtext)
+	document.elements = make([dynamic]Element)
 
 	timing: time.Stopwatch
 	time.stopwatch_start(&timing)
@@ -217,23 +223,37 @@ parse_document :: proc(browser: ^Browser, source: string, source_do_clone := fal
 	if len(mime_parts) < 1 || mime_parts[0] != "text/gemini" do log.panicf("todo: implement more media types, received = %s", mime)
 	log.debugf("parse_document :: mime %s", mime)
 
-	in_preformat := false
+	in_preformat: bool
+	config_empty := gemtext_options(browser, .Empty)
 	for !reader_eof(&r) {
+		// NOTE(XENOBAS): Gemtext uses \n for delimiters unlike Gemini data response
 		line := reader_read_delimiter(&r, "\n")
 		gemtext := gemtext_parse(line, in_preformat)
 		switch gemtext.kind {
 		case .Text, .Blockquote, .List, .Heading_1, .Heading_2, .Heading_3:
 			config := gemtext_options(browser, gemtext.kind)
 			lines := text_wrap(browser, gemtext.data.(string), config, VIEW_WIDTH)
-			for line in lines do append(&document.gemtext, Gemtext{ gemtext.kind, line })
+			for line in lines {
+				gemtext_line := Gemtext{ gemtext.kind, line.text }
+				append(&document.elements, Element{ line.size, document.height, gemtext_line })
+				document.height += line.size.y
+				document.height += font_size_float(config_empty.font_size) * 0.4
+			}
 		case .Link:
 			config := gemtext_options(browser, .Link)
 			gemtext := gemtext.data.(Gemtext_Link)
 			lines := text_wrap(browser, gemtext.text, config, VIEW_WIDTH)
-			for line in lines do append(&document.gemtext, Gemtext{ .Link, Gemtext_Link{ line, gemtext.url } })
+			for line in lines {
+				gemtext_line := Gemtext{ .Link, Gemtext_Link{ line.text, gemtext.url } }
+				append(&document.elements, Element{ line.size, document.height, gemtext_line })
+				document.height += line.size.y
+				document.height += font_size_float(config_empty.font_size) * 0.4
+			}
 		case .Empty, .Preformatting_Delimiter:
 			if gemtext.kind == .Preformatting_Delimiter do in_preformat = !in_preformat
-			append(&document.gemtext, gemtext)
+			height := font_size_float(config_empty.font_size) if gemtext.kind == .Empty else 0.0
+			append(&document.elements, Element{ { 0, height }, document.height, gemtext })
+			document.height += height
 		}
 	}
 	time.stopwatch_stop(&timing)
@@ -246,5 +266,5 @@ parse_document :: proc(browser: ^Browser, source: string, source_do_clone := fal
 
 delete_document :: proc(document: Document) {
 	delete(document.source)
-	delete(document.gemtext)
+	delete(document.elements)
 }
