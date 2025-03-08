@@ -19,17 +19,17 @@ Font_Asset :: [Font_Size]raylib.Font
 font_size_int :: proc(size: Font_Size) -> i32 {
 	switch (size) {
 	case .Extra_Small:
-		return 8
+		return i32(f64(8) * TEXT_FACTOR)
 	case .Small:
-		return 12
+		return i32(f64(12) * TEXT_FACTOR)
 	case .Regular:
-		return 16
+		return i32(f64(16) * TEXT_FACTOR)
 	case .Large:
-		return 20
+		return i32(f64(20) * TEXT_FACTOR)
 	case .Extra_Large:
-		return 24
+		return i32(f64(24) * TEXT_FACTOR)
 	case:
-		return 16
+		return i32(f64(16) * TEXT_FACTOR)
 	}
 }
 

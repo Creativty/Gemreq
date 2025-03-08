@@ -135,6 +135,10 @@ _request_write :: proc(ep: Endpoint, request: ^strings.Builder) {
 }
 
 request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) {
+	// Timing start
+	timing: time.Stopwatch
+	time.stopwatch_start(&timing)
+
 	// Open backing socket
 	sock := net.dial_tcp(ep.host, ep.port) or_return
 	defer net.close(sock)
@@ -173,8 +177,14 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 		strings.write_string(&buff_b, transmute(string)buff_temp[:n])
 	}
 
+	// Timing end
+	time.stopwatch_stop(&timing)
+	timing_duration := time.stopwatch_duration(timing)
+	log.debugf("request_document took %v.", timing_duration)
+
 	resp_tmp := strings.to_string(buff_b)
 	response  = strings.clone(resp_tmp)
+
 	return response, nil
 }
 
@@ -198,7 +208,9 @@ parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> 
 
 	reader_skip_whitespace(&r)
 	mime := reader_read_delimiter(&r, "\r\n")
-	if mime != "text/gemini" do log.panicf("todo: implement more media types, received = %s", mime)
+	mime_parts := strings.split_multi(mime, { ";", " " })
+	defer delete(mime_parts)
+	if len(mime_parts) < 1 || mime_parts[0] != "text/gemini" do log.panicf("todo: implement more media types, received = %s", mime)
 	log.debugf("request mime %s", mime)
 
 	in_preformat := false

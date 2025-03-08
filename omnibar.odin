@@ -10,14 +10,15 @@ import "vendor:raylib"
 Text_Edit_State :: edit.State
 
 Omnibar :: struct {
-	visible: bool,
-	disabled: bool,
 	state: Text_Edit_State,
 	builder: strings.Builder,
 
+	error: Maybe(cstring),
+	visible: bool,
+	disabled: bool,
+
 	caret: f32,
 	caret_time: f64,
-	error: Maybe(cstring),
 }
 
 launch_omnibar :: proc(omnibar: ^Omnibar) {
@@ -31,7 +32,6 @@ launch_omnibar :: proc(omnibar: ^Omnibar) {
 
 	edit.input_text(&omnibar.state, "gemini://geminiprotocol.net")
 
-	// NOTE(XENOBAS): WHY THE FUCK DID I DIVIDE BY 2 ?!?
 	omnibar.caret = cast(f32)omnibar.state.selection.x
 	log.debug("omnibar initialised")
 }
@@ -49,7 +49,6 @@ unload_omnibar :: proc(omnibar: ^Omnibar) {
 
 update_omnibar :: proc(browser: ^Browser, dt: f64) {
 	omnibar := &browser.omnibar
-
 	if !omnibar.disabled {
 		for {
 			char := raylib.GetCharPressed()
@@ -59,13 +58,9 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 			if char != rune(0) && len(text) <= 60 do edit.input_rune(&omnibar.state, char)
 		}
 
-		key_goto := raylib.IsKeyPressed(.ENTER)
 		key_control := raylib.IsKeyDown(.LEFT_CONTROL) || raylib.IsKeyDown(.RIGHT_CONTROL)
 
-		if key_control && raylib.IsKeyPressed(.L) {
-			omnibar.visible = !omnibar.visible || browser.document == nil
-			omnibar.caret_time = raylib.GetTime()
-		}
+		key_goto := raylib.IsKeyPressed(.ENTER)
 		if key_goto {
 			url_pre_process := strings.trim_space(strings.to_string(omnibar.builder))
 			if key_control && len(url_pre_process) > 0 {
@@ -108,6 +103,13 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 				omnibar.caret_time = raylib.GetTime()
 			}
 		}
+
+		key_omnibar := key_control && raylib.IsKeyPressed(.L)
+		if key_omnibar {
+			omnibar.visible = !omnibar.visible || browser.document == nil
+			omnibar.caret_time = raylib.GetTime()
+		}
+
 		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, LERP_FACTOR)
 	}
 }
