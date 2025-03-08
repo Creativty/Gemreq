@@ -50,7 +50,10 @@ unload_omnibar :: proc(omnibar: ^Omnibar) {
 update_omnibar :: proc(browser: ^Browser, dt: f64) {
 	omnibar := &browser.omnibar
 	if !omnibar.disabled {
+		key_alt := raylib.IsKeyDown(.LEFT_ALT) || raylib.IsKeyDown(.RIGHT_ALT)
+		key_control := raylib.IsKeyDown(.LEFT_CONTROL) || raylib.IsKeyDown(.RIGHT_CONTROL)
 		for {
+			if key_control || key_alt do break
 			char := raylib.GetCharPressed()
 			if char == rune(0) do break
 
@@ -58,14 +61,15 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 			if char != rune(0) && len(text) <= 60 do edit.input_rune(&omnibar.state, char)
 		}
 
-		key_control := raylib.IsKeyDown(.LEFT_CONTROL) || raylib.IsKeyDown(.RIGHT_CONTROL)
-
 		key_goto := raylib.IsKeyPressed(.ENTER)
 		if key_goto {
 			url_pre_process := strings.trim_space(strings.to_string(omnibar.builder))
 			if key_control && len(url_pre_process) > 0 {
 				PROTOCOL	:: "gemini://"
 				DOMAINS		:: []string{ ".com", ".net", ".io", ".dev", "." }
+
+				must_add_protocol := !strings.has_prefix(url_pre_process, PROTOCOL)
+				if must_add_protocol do edit.insert(&omnibar.state, 0, PROTOCOL)
 
 				must_add_domain := true
 				for domain in DOMAINS {
@@ -75,9 +79,6 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 					}
 				}
 				if must_add_domain do edit.input_text(&omnibar.state, ".net")
-
-				must_add_protocol := !strings.has_prefix(url_pre_process, PROTOCOL)
-				if must_add_protocol do edit.insert(&omnibar.state, 0, PROTOCOL)
 			}
 
 			url_post_process := strings.trim_space(strings.to_string(omnibar.builder))

@@ -8,7 +8,7 @@ import "vendor:raylib"
 
 Thread :: thread.Thread
 
-TEXT_FACTOR		:= f64(1.2)
+TEXT_FACTOR		:= f64(1.0)
 LERP_FACTOR		:= f64(0.3)
 
 WINDOW_PAD_X	:: 32

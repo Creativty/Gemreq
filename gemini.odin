@@ -142,6 +142,7 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 	// Open backing socket
 	sock := net.dial_tcp(ep.host, ep.port) or_return
 	defer net.close(sock)
+	log.debugf("request_document :: connection established")
 
 	// Open secure socket
 	ssl_ctx, ssl_inst := _request_ssl_init(net.Socket(sock)) or_return
@@ -152,6 +153,8 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 		return response, posix.strerror(posix.errno())
 	}
 	defer ssl.SSL_shutdown(ssl_inst)
+
+	log.debugf("request_document :: connection is now secured")
 
 	request_b: strings.Builder
 	strings.builder_init(&request_b)
@@ -180,7 +183,7 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 	// Timing end
 	time.stopwatch_stop(&timing)
 	timing_duration := time.stopwatch_duration(timing)
-	log.debugf("request_document took %v.", timing_duration)
+	log.debugf("request_document :: timing %v.", timing_duration)
 
 	resp_tmp := strings.to_string(buff_b)
 	response  = strings.clone(resp_tmp)
@@ -191,51 +194,52 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 Document :: struct {
 	status: int,
 	source: string,
+	bounds: [2]f32,
 	gemtext: [dynamic]Gemtext,
 }
 
-parse_document :: proc(browser: ^Browser, source: string, do_clone := false) -> (document: Document) {
-	timing: time.Stopwatch
-
-	time.stopwatch_start(&timing)
-	document.source = strings.clone(source) if do_clone else source
+parse_document :: proc(browser: ^Browser, source: string, source_do_clone := false) -> (document: Document) {
+	document.source = strings.clone(source) if source_do_clone else source
 	document.gemtext = make([dynamic]Gemtext)
+
+	timing: time.Stopwatch
+	time.stopwatch_start(&timing)
 
 	r := reader_make(document.source)
 	document.status = reader_read_int(&r)
 	if document.status != 20 do log.panicf("todo: implement more status codes, received = %d", document.status)
-	log.debugf("request status %d", document.status)
+	log.debugf("parse_document :: status %d", document.status)
 
 	reader_skip_whitespace(&r)
 	mime := reader_read_delimiter(&r, "\r\n")
 	mime_parts := strings.split_multi(mime, { ";", " " })
 	defer delete(mime_parts)
 	if len(mime_parts) < 1 || mime_parts[0] != "text/gemini" do log.panicf("todo: implement more media types, received = %s", mime)
-	log.debugf("request mime %s", mime)
+	log.debugf("parse_document :: mime %s", mime)
 
 	in_preformat := false
 	for !reader_eof(&r) {
 		line := reader_read_delimiter(&r, "\n")
-		element := gemtext_parse(line, in_preformat)
-		switch element.kind {
+		gemtext := gemtext_parse(line, in_preformat)
+		switch gemtext.kind {
 		case .Text, .Blockquote, .List, .Heading_1, .Heading_2, .Heading_3:
-			config := gemtext_options(browser, element.kind)
-			lines := text_wrap(browser, element.data.(string), config, VIEW_WIDTH)
-			for line in lines do append(&document.gemtext, Gemtext{ element.kind, line })
+			config := gemtext_options(browser, gemtext.kind)
+			lines := text_wrap(browser, gemtext.data.(string), config, VIEW_WIDTH)
+			for line in lines do append(&document.gemtext, Gemtext{ gemtext.kind, line })
 		case .Link:
 			config := gemtext_options(browser, .Link)
-			element := element.data.(Gemtext_Link)
-			lines := text_wrap(browser, element.text, config, VIEW_WIDTH)
-			for line in lines do append(&document.gemtext, Gemtext{ .Link, Gemtext_Link{ line, element.url } })
+			gemtext := gemtext.data.(Gemtext_Link)
+			lines := text_wrap(browser, gemtext.text, config, VIEW_WIDTH)
+			for line in lines do append(&document.gemtext, Gemtext{ .Link, Gemtext_Link{ line, gemtext.url } })
 		case .Empty, .Preformatting_Delimiter:
-			if element.kind == .Preformatting_Delimiter do in_preformat = !in_preformat
-			append(&document.gemtext, element)
+			if gemtext.kind == .Preformatting_Delimiter do in_preformat = !in_preformat
+			append(&document.gemtext, gemtext)
 		}
 	}
 	time.stopwatch_stop(&timing)
 
 	timing_duration := time.stopwatch_duration(timing)
-	log.debugf("parse_document took %v.", timing_duration)
+	log.debugf("parse_document :: timing %v.", timing_duration)
 
 	return
 }

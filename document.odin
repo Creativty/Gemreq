@@ -40,7 +40,7 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 		measure := raylib.MeasureTextEx(font, text, size, config.spacing)
 
 		if cast(f64)offset_y + WINDOW_PAD_Y * 4 >= 0 {
-			raylib.DrawTextEx(font, text, { WINDOW_PAD_X, WINDOW_PAD_Y + offset_y }, size, config.spacing, config.color)
+			raylib.DrawTextEx(font, text, { max(WINDOW_PAD_X, (WINDOW_WIDTH - measure.x) / 2) if node.kind == .Heading_1 else WINDOW_PAD_X, WINDOW_PAD_Y + offset_y }, size, config.spacing, config.color)
 			if node.kind == .Link {
 				box := raylib.Rectangle{ WINDOW_PAD_X, WINDOW_PAD_Y + offset_y, measure.x, measure.y }
 				mouse := raylib.GetMousePosition()
