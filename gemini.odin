@@ -60,6 +60,27 @@ parse_endpoint :: proc(src: string) -> (ep: Endpoint){
 	return ep
 }
 
+resolve_endpoint :: proc(browser: ^Browser, url: string)
+{
+	url := url
+	endpoint := &browser.endpoint.(Endpoint)
+
+	if strings.has_prefix(url, "+") do url = url[1:]
+
+	if strings.has_prefix(url, "/") {
+		for part in endpoint.path do delete(part)
+		clear(&endpoint.path)
+	}
+
+	if len(endpoint.path) > 0 && strings.has_suffix(endpoint.path[len(endpoint.path) - 1], ".gmi") {
+		delete(pop(&endpoint.path))
+	}
+
+	parts := strings.split(url, "/")
+	defer delete(parts)
+	for part in parts do append(&endpoint.path, strings.clone(part))
+}
+
 delete_endpoint :: proc(ep: Endpoint) {
 	for level in ep.path do delete(level)
 	delete(ep.path)

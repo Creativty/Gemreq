@@ -18,6 +18,7 @@ update_document :: proc(browser: ^Browser, dt: f64) {
 
 draw_document :: proc(browser: ^Browser, document: Document) {
 	if document.status != 20 do return
+	preview: Maybe(string)
 	offset_y := f32(-browser.scroll.current)
 	config_empty := gemtext_wrap_config(browser, .Empty)
 	for node in document.gemtext {
@@ -40,9 +41,10 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 				mouse := raylib.GetMousePosition()
 				if raylib.CheckCollisionPointRec(mouse, box) {
 					raylib.DrawRectangle(WINDOW_PAD_X, i32(WINDOW_PAD_Y + offset_y + measure.y), i32(measure.x), 1, color_link)
-					if raylib.IsMouseButtonPressed(.LEFT) {
-						navigate_click(browser, node.data.(Gemtext_Link).url)
-					}
+					url := node.data.(Gemtext_Link).url
+					preview = url
+					// Instigate navigation
+					if raylib.IsMouseButtonPressed(.LEFT) do navigate_click(browser, url)
 				}
 			}
 		}
@@ -50,6 +52,24 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 		offset_y += font_size_float(config_empty.font_size) * 0.5
 
 		if offset_y > VIEW_HEIGHT do break
+	}
+	// Draw url preview
+	if url, preview_visible := preview.(string); preview_visible {
+		text := strings.clone_to_cstring(url, context.temp_allocator)
+		size := font_size_float(Font_Size.Extra_Small)
+		font := browser.fonts[FONT_SANS_REGULAR][Font_Size.Extra_Small]
+		measure := raylib.MeasureTextEx(font, text, size, 1.0)
+		padding := [2]f32{ size, size }
+		box_preview := raylib.Rectangle{
+			0,
+			WINDOW_HEIGHT - measure.y - padding.y * 2,
+			measure.x + padding.x * 2,
+			measure.y + padding.y * 2,
+		}
+		// raylib.DrawRectangleRec(box_preview, raylib.GetColor(0xF1F1F1FF))
+		raylib.DrawRectangleRec(box_preview, raylib.GetColor(0x191919FF))
+		raylib.DrawTextEx(font, text, { box_preview.x, box_preview.y } + padding, size, 1.0, color_text)
+		raylib.DrawRectangleLinesEx(box_preview, 1.0, raylib.GetColor(0x000000FF))
 	}
 	free_all(context.temp_allocator)
 }

@@ -59,106 +59,6 @@ unload :: proc(browser: ^Browser) {
 	delete(browser.fonts)
 }
 
-navigate_click :: proc(browser: ^Browser, url: string) {
-	browser.navigate_queue = url
-}
-
-navigate_string :: proc(browser: ^Browser, url: string) {
-	// TODO(XENOBAS): move this into its own thread
-	omnibar := &browser.omnibar
-
-	omnibar.disabled = true
-	defer omnibar.disabled = false
-
-	if error_string, error_present := omnibar.error.(cstring); error_present {
-		delete(error_string)
-		omnibar.error = nil
-	}
-
-	if ep_old, ep_old_present := browser.endpoint.(Endpoint); ep_old_present {
-		delete_endpoint(ep_old)
-	}
-	ep := parse_endpoint(url)
-	browser.endpoint = ep
-
-	resp, err := request_document(ep)
-	if err != nil {
-		omnibar.error = fmt.caprintf("%v", err)
-		return
-	}
-	
-	document := parse_document(browser, resp)
-
-	if doc_old, doc_exists := browser.document.(Document); doc_exists {
-		browser.scroll.target = 0
-		browser.scroll.current = 0
-		delete_document(doc_old)
-	}
-	browser.document = document
-	omnibar.visible = false
-}
-
-navigate_endpoint :: proc(browser: ^Browser, ep: Endpoint, edit_history := false) {
-	omnibar := &browser.omnibar
-
-	omnibar.disabled = true
-	defer omnibar.disabled = false
-
-	if error_string, error_present := omnibar.error.(cstring); error_present {
-		delete(error_string)
-		omnibar.error = nil
-	}
-
-	if edit_history {
-		if ep_old, ep_old_present := browser.endpoint.(Endpoint); ep_old_present {
-			delete_endpoint(ep_old)
-		}
-		browser.endpoint = ep
-	}
-
-	resp, err := request_document(ep)
-	if err != nil {
-		omnibar.error = fmt.caprintf("%v", err)
-		return
-	}
-	
-	document := parse_document(browser, resp)
-
-	if doc_old, doc_exists := browser.document.(Document); doc_exists {
-		browser.scroll.target = 0
-		browser.scroll.current = 0
-		delete_document(doc_old)
-	}
-	browser.document = document
-	omnibar.visible = false
-}
-
-navigate :: proc {
-	navigate_string,
-	navigate_endpoint,
-}
-
-resolve_endpoint :: proc(browser: ^Browser, url: string)
-{
-	url := url
-	endpoint := &browser.endpoint.(Endpoint)
-
-	if strings.has_prefix(url, "+") do url = url[1:]
-
-	if strings.has_prefix(url, "/") {
-		for part in endpoint.path do delete(part)
-		clear(&endpoint.path)
-	}
-
-	if len(endpoint.path) > 0 && strings.has_suffix(endpoint.path[len(endpoint.path) - 1], ".gmi") {
-		delete(pop(&endpoint.path))
-	}
-
-	parts := strings.split(url, "/")
-	defer delete(parts)
-	for part in parts do append(&endpoint.path, strings.clone(part))
-}
-
 update :: proc(browser: ^Browser, dt: f64) {
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 
@@ -204,7 +104,7 @@ main :: proc() {
 	using raylib
 
 	SetTraceLogLevel(.WARNING)
-	SetTargetFPS(60)
+	SetTargetFPS(120)
 	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT })
 
 	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Gemreq: Gemini browser")
