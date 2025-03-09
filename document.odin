@@ -1,11 +1,8 @@
 package gemreq
 
-import "core:fmt"
 import "core:math"
 import "core:strings"
 import "vendor:raylib"
-
-SCROLL_FACTOR :: VIEW_HEIGHT / 3 * 2
 
 update_document :: proc(browser: ^Browser, dt: f64) {
 	document, document_is_loaded := browser.document.(Document)
@@ -18,8 +15,7 @@ update_document :: proc(browser: ^Browser, dt: f64) {
 	if key_scroll_up do browser.scroll.target -= SCROLL_FACTOR
 	if key_scroll_down do browser.scroll.target += SCROLL_FACTOR
 	browser.scroll.target += f64(key_wheel)
-	browser.scroll.target  = math.min(browser.scroll.target, f64(document.height - VIEW_HEIGHT))
-	browser.scroll.target  = math.max(browser.scroll.target, 0)
+	browser.scroll.target  = max(min(browser.scroll.target, f64(document.height - VIEW_HEIGHT)), 0)
 	browser.scroll.current = math.lerp(browser.scroll.current, browser.scroll.target, LERP_FACTOR)
 }
 
