@@ -21,6 +21,7 @@ Endpoint :: struct {
 	port: int,
 }
 
+// TODO(XENOBAS): Implement a better endpoint parser, because this one is trash.
 parse_endpoint :: proc(src: string) -> (ep: Endpoint){
 	ep.port = 1965
 	ep.path = make([dynamic]string)
@@ -54,7 +55,9 @@ parse_endpoint :: proc(src: string) -> (ep: Endpoint){
 
 		for view in views {
 			if len(view) == 0 do continue
-			append(&ep.path, strings.clone(view))
+			view := strings.trim_left(view, "+")
+			part := strings.clone(view)
+			append(&ep.path, part)
 		}
 	}
 
@@ -77,9 +80,9 @@ resolve_endpoint :: proc(browser: ^Browser, url: string)
 		delete(pop(&endpoint.path))
 	}
 
-	parts := strings.split(url, "/")
+	parts := strings.split_multi(url, { "/" })
 	defer delete(parts)
-	for part in parts do append(&endpoint.path, strings.clone(part))
+	for part in parts do append(&endpoint.path, strings.clone(strings.trim_left(part, "~+")))
 }
 
 delete_endpoint :: proc(ep: Endpoint) {
@@ -139,6 +142,8 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 	timing: time.Stopwatch
 	time.stopwatch_start(&timing)
 
+	log.debugf("request_document :: endpoint %v", ep)
+
 	// Open backing socket
 	sock := net.dial_tcp(ep.host, ep.port) or_return
 	defer net.close(sock)
@@ -150,7 +155,9 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 
 	// Attempt connection
 	if ssl.SSL_connect(ssl_inst) < 0 {
-		return response, posix.strerror(posix.errno())
+		error := posix.strerror(posix.errno())
+		log.errorf("request_document :: could not secure connection reason %s", error)
+		return response, error
 	}
 	defer ssl.SSL_shutdown(ssl_inst)
 

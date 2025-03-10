@@ -52,6 +52,11 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 
 	// Draw url preview
 	if url, url_visible := preview.(string); url_visible do draw_preview_url(browser, url)
+	if browser.omnibar.disabled {
+		time := raylib.GetTime() - browser.omnibar.disabled_timestamp
+		wave := f32(math.sin(time * 2.0) * (WINDOW_PAD_X / 4.0))
+		raylib.DrawCircleV({ WINDOW_WIDTH - WINDOW_PAD_X / 2.0, WINDOW_HEIGHT - WINDOW_PAD_X / 2.0 }, wave, color_link)
+	}
 }
 
 draw_preview_url :: proc(browser: ^Browser, url: string) {

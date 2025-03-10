@@ -16,6 +16,7 @@ Omnibar :: struct {
 	error: Maybe(cstring),
 	visible: bool,
 	disabled: bool,
+	disabled_timestamp: f64,
 
 	caret: f32,
 	caret_time: f64,
