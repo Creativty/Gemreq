@@ -21,7 +21,17 @@ Endpoint :: struct {
 	port: int,
 }
 
-// TODO(XENOBAS): Implement a better endpoint parser, because this one is trash.
+clone_endpoint :: proc(src: Endpoint) -> (clone: Endpoint) {
+	clone.port = src.port
+	clone.host = strings.clone(src.host)
+	clone.path = make([dynamic]string)
+	for entry in src.path {
+		entry_clone := strings.clone(entry)
+		append(&clone.path, entry_clone)
+	}
+	return
+}
+
 parse_endpoint :: proc(src: string) -> (ep: Endpoint){
 	ep.port = 1965
 	ep.path = make([dynamic]string)
@@ -64,25 +74,56 @@ parse_endpoint :: proc(src: string) -> (ep: Endpoint){
 	return ep
 }
 
-resolve_endpoint :: proc(browser: ^Browser, url: string)
-{
+// TODO(XENOBAS): Add support for ../. relative path
+resolve_endpoint :: proc(browser: ^Browser, url: string) -> (ep: Endpoint, is_external: bool) {
 	url := url
-	endpoint := &browser.endpoint.(Endpoint)
+	ep_parent, ep_parent_exists := browser.endpoint.(Endpoint)
+	if !ep_parent_exists || strings.contains(url, "://") {
+		// Absolute URL
+		if strings.has_prefix(url, "gemini://") {
+			return parse_endpoint(url), false
+		}
+		return ep, true
+	} else if strings.has_prefix(url, "/") || strings.has_prefix(url, "~") {
+		assert(ep_parent_exists, "invalid url expected a parent endpoint existing")
 
-	if strings.has_prefix(url, "+") do url = url[1:]
+		// Absolute path
+		url = strings.trim_left(url, "/~")
 
-	if strings.has_prefix(url, "/") {
-		for part in endpoint.path do delete(part)
-		clear(&endpoint.path)
+		ep = clone_endpoint(ep_parent)
+		for entry in ep.path do delete(entry)
+		clear(&ep.path)
+
+		path := strings.split(url, "/")
+		defer delete(path)
+
+		for entry in path {
+			if len(entry) == 0 do continue
+			entry_clone := strings.clone(entry)
+			append(&ep.path, entry_clone)
+		}
+		return ep, false
+	} else {
+		assert(ep_parent_exists, "invalid url expected a parent endpoint existing")
+
+		// Relative path
+		url = strings.trim_left(url, "+")
+		ep = clone_endpoint(ep_parent)
+
+		if len(ep.path) > 0 && strings.contains(ep.path[len(ep.path) - 1], ".") {
+			pop(&ep.path)
+		}
+
+		path := strings.split(url, "/")
+		defer delete(path)
+
+		for entry in path {
+			if len(entry) == 0 do continue
+			entry_clone := strings.clone(entry)
+			append(&ep.path, entry_clone)
+		}
+		return ep, false
 	}
-
-	if len(endpoint.path) > 0 && strings.has_suffix(endpoint.path[len(endpoint.path) - 1], ".gmi") {
-		delete(pop(&endpoint.path))
-	}
-
-	parts := strings.split_multi(url, { "/" })
-	defer delete(parts)
-	for part in parts do append(&endpoint.path, strings.clone(strings.trim_left(part, "~+")))
 }
 
 delete_endpoint :: proc(ep: Endpoint) {

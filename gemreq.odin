@@ -55,8 +55,8 @@ launch :: proc(browser: ^Browser) {
 	browser.document = nil
 
 	browser.fonts = make(map[string]Font_Asset)
-	font_load(browser, FONT_SANS_REGULAR, "font/ttf/DejaVuSans.ttf")
-	font_load(browser, FONT_SANS_BOLD, "font/ttf/DejaVuSans-Bold.ttf")
+	font_load(browser, FONT_SANS_REGULAR, "font/NotoSans-Regular.ttf")
+	font_load(browser, FONT_SANS_BOLD, "font/NotoSans-Bold.ttf")
 
 	launch_omnibar(&browser.omnibar)
 }
@@ -77,17 +77,13 @@ update :: proc(browser: ^Browser, dt: f64) {
 	key_debug := raylib.IsKeyPressed(.F3)
 	if key_debug do browser.debug = !browser.debug
 	if url, queue_filled := browser.navigate_queue.(string); queue_filled {
-		if strings.contains(url, "://") {
-			if strings.has_prefix(url, "gemini://") do navigate(browser, url)
-			else {
-				url := strings.clone_to_cstring(url)
-				defer delete(url)
-
-				raylib.OpenURL(url)
-			}
+		endpoint, endpoint_external := resolve_endpoint(browser, url)
+		if endpoint_external {
+			log.debugf("external url %s", url)
+			url_cstring := strings.clone_to_cstring(url, context.temp_allocator)
+			raylib.OpenURL(url_cstring)
 		} else {
-			resolve_endpoint(browser, url)
-			navigate(browser, browser.endpoint.(Endpoint))
+			navigate(browser, endpoint)
 		}
 		browser.navigate_queue = nil
 	}
@@ -180,7 +176,7 @@ main :: proc() {
 		}
 	}
 	 
-	browser.network_thread = thread.create_and_start_with_data(&browser, main_network)
+	browser.network_thread = thread.create_and_start_with_data(&browser, main_network, init_context = context)
 	defer {
 		chan.close(&browser.channels.request)
 		chan.close(&browser.channels.document)
