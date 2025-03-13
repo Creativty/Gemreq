@@ -93,7 +93,7 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 		size	:= font_size_float(config.font_size)
 		font	:= browser.fonts[config.font_name][config.font_size]
 		x		:= ui.padding.x
-		if gemtext.kind == .Heading_1 do x = max(ui.padding.x, (ui.view.x - element.size.x) / 2)
+		if gemtext.kind == .Heading_1 do x = max(ui.padding.x, (ui.window.x - element.size.x) / 2)
 		raylib.DrawTextEx(font, text, { x, ui.padding.y + offset }, size, config.spacing, config.color)
 		if gemtext.kind == .Link {
 			box := raylib.Rectangle{ ui.padding.x, ui.padding.y + offset, element.size.x, element.size.y }
