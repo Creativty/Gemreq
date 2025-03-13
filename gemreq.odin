@@ -22,7 +22,9 @@ Result_Document :: union {
 * PADDING [ 40, 20] :: [0.07, 0.05]
 */
 
-LERP_FACTOR		:= 0.3
+// TODO(XENOBAS): Implement URI encoding.
+
+LERP_FACTOR		:= 0.2
 SCROLL_FACTOR	:= 0.6
 
 color_text := raylib.GetColor(0xE8EAEDFF)
@@ -118,8 +120,8 @@ main :: proc() {
 	defer log.destroy_console_logger(context.logger)
 
 	SetTraceLogLevel(.WARNING)
+	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT, .WINDOW_RESIZABLE }) // TODO(XENOBAS): Add .WINDOW_UNDECORATED
 	SetTargetFPS(120)
-	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT, .WINDOW_RESIZABLE })
 
 	InitWindow(i32(WINDOW_WIDTH), i32(WINDOW_HEIGHT), "Gemreq - Gemini browser")
 	log.infof("window created %02.2fx%02.2f", WINDOW_WIDTH, WINDOW_HEIGHT)
