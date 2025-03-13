@@ -130,7 +130,7 @@ draw_omnibar :: proc(browser: ^Browser) {
 	// Frame
 	input_pad := [2]f32{ font_size_f32 * 2.0, font_size_f32 } / 2.0
 	input_height := font_size_f32 + input_pad.y * 2
-	input_frame := Rectangle{ WINDOW_PAD_X, WINDOW_PAD_Y, VIEW_WIDTH, input_height }
+	input_frame := Rectangle{ f32(WINDOW_PAD_X), f32(WINDOW_PAD_Y), f32(VIEW_WIDTH), input_height }
 	DrawRectangleRec(input_frame, GetColor(0xE6E6E6FF) if omnibar.disabled else WHITE)
 	DrawRectangleLinesEx(input_frame, 2.0, GetColor(0xE6E6FFFF) if omnibar.disabled else GetColor(0xE6D6FFFF))
 
@@ -151,7 +151,7 @@ draw_omnibar :: proc(browser: ^Browser) {
 		error_font := browser.fonts[FONT_SANS_BOLD][error_size]
 		error_spacing := f32(16)
 		error_size_f32 := font_size_float(error_size)
-		error_position := [2]f32{ WINDOW_PAD_X, input_frame.y + input_frame.height + error_spacing }
+		error_position := [2]f32{ f32(WINDOW_PAD_X), input_frame.y + input_frame.height + error_spacing }
 		DrawTextEx(error_font, error_text, error_position, error_size_f32, 1.0, GetColor(0xFF0033FF))
 	}
 

@@ -9,13 +9,13 @@ update_document :: proc(browser: ^Browser, dt: f64) {
 	if !document_is_loaded || browser.omnibar.visible do return
 
 	key_shift := raylib.IsKeyDown(.LEFT_SHIFT) || raylib.IsKeyDown(.RIGHT_SHIFT)
-	key_wheel := -raylib.GetMouseWheelMove() * SCROLL_FACTOR * (1 if key_shift else .1)
+	key_wheel := -f64(raylib.GetMouseWheelMove()) * SCROLL_FACTOR * (1 if key_shift else .1)
 	key_scroll_up := raylib.IsKeyPressed(.PAGE_UP) || raylib.IsKeyPressedRepeat(.PAGE_UP)
 	key_scroll_down := raylib.IsKeyPressed(.PAGE_DOWN) || raylib.IsKeyPressedRepeat(.PAGE_DOWN)
 	if key_scroll_up do browser.scroll.target -= SCROLL_FACTOR
 	if key_scroll_down do browser.scroll.target += SCROLL_FACTOR
 	browser.scroll.target += f64(key_wheel)
-	browser.scroll.target  = max(min(browser.scroll.target, f64(document.height - VIEW_HEIGHT)), 0)
+	browser.scroll.target  = max(min(browser.scroll.target, f64(document.height) - VIEW_HEIGHT), 0)
 	browser.scroll.current = math.lerp(browser.scroll.current, browser.scroll.target, LERP_FACTOR)
 }
 
@@ -35,13 +35,13 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 		size	:= font_size_float(config.font_size)
 		font	:= browser.fonts[config.font_name][config.font_size]
 		x		:= f32(WINDOW_PAD_X)
-		if gemtext.kind == .Heading_1 do x = max(WINDOW_PAD_X, (WINDOW_WIDTH - element.size.x) / 2)
-		raylib.DrawTextEx(font, text, { x, WINDOW_PAD_Y + f32(offset) }, size, config.spacing, config.color)
+		if gemtext.kind == .Heading_1 do x = max(f32(WINDOW_PAD_X), (f32(WINDOW_WIDTH) - element.size.x) / 2)
+		raylib.DrawTextEx(font, text, { x, f32(WINDOW_PAD_Y) + f32(offset) }, size, config.spacing, config.color)
 		if gemtext.kind == .Link {
-			box := raylib.Rectangle{ WINDOW_PAD_X, WINDOW_PAD_Y + f32(offset), element.size.x, element.size.y }
+			box := raylib.Rectangle{ f32(WINDOW_PAD_X), f32(WINDOW_PAD_Y) + f32(offset), element.size.x, element.size.y }
 			mouse := raylib.GetMousePosition()
 			if raylib.CheckCollisionPointRec(mouse, box) {
-				raylib.DrawRectangle(WINDOW_PAD_X, i32(WINDOW_PAD_Y + f32(offset) + element.size.y), i32(element.size.x), 1, config.color)
+				raylib.DrawRectangle(i32(WINDOW_PAD_X), i32(WINDOW_PAD_Y + offset + f64(element.size.y)), i32(element.size.x), 1, config.color)
 				url := gemtext.data.(Gemtext_Link).url
 				preview = url
 				// Instigate navigation
@@ -55,7 +55,7 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 	if browser.omnibar.disabled {
 		time := raylib.GetTime() - browser.omnibar.disabled_timestamp
 		wave := f32(math.sin(time * 2.0) * (WINDOW_PAD_X / 4.0))
-		raylib.DrawCircleV({ WINDOW_WIDTH - WINDOW_PAD_X / 2.0, WINDOW_HEIGHT - WINDOW_PAD_X / 2.0 }, wave, color_link)
+		raylib.DrawCircleV({ f32(WINDOW_WIDTH) - f32(WINDOW_PAD_X) / 2.0, f32(WINDOW_HEIGHT) - f32(WINDOW_PAD_X) / 2.0 }, wave, color_link)
 	}
 }
 
@@ -69,7 +69,7 @@ draw_preview_url :: proc(browser: ^Browser, url: string) {
 	padding := [2]f32{ size_f32, size_f32 / 3.0 * 2.0 }
 	box_preview := raylib.Rectangle{
 		0,
-		WINDOW_HEIGHT - measure.y - padding.y * 2,
+		f32(WINDOW_HEIGHT) - measure.y - padding.y * 2,
 		measure.x + padding.x * 2,
 		measure.y + padding.y * 2,
 	}

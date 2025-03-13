@@ -16,18 +16,20 @@ Result_Document :: union {
 	Document,
 }
 
-TEXT_FACTOR		:= f64(1.0)
 LERP_FACTOR		:= f64(0.3)
-SCROLL_FACTOR	:: VIEW_HEIGHT / 3 * 2
+SCALE_FACTOR	:= f64(2.0)
 
-WINDOW_PAD_X	:: 32
-WINDOW_PAD_Y	:: 16
+WINDOW_PAD_X	:= 32 * SCALE_FACTOR
+WINDOW_PAD_Y	:= 16 * SCALE_FACTOR
 
-VIEW_WIDTH		:: 500
-VIEW_HEIGHT		:: 600
+VIEW_WIDTH		:= 500 * SCALE_FACTOR
+VIEW_HEIGHT		:= 600 * SCALE_FACTOR
 
-WINDOW_WIDTH	:: (WINDOW_PAD_X * 2) + VIEW_WIDTH
-WINDOW_HEIGHT	:: (WINDOW_PAD_Y * 2) + VIEW_HEIGHT
+TEXT_FACTOR		:= f64(1.0) * SCALE_FACTOR
+SCROLL_FACTOR	:= VIEW_HEIGHT / 3 * 2
+
+WINDOW_WIDTH	:= i32((WINDOW_PAD_X * 2) + VIEW_WIDTH)
+WINDOW_HEIGHT	:= i32((WINDOW_PAD_Y * 2) + VIEW_HEIGHT)
 
 color_text := raylib.GetColor(0xE8EAEDFF)
 color_link := raylib.GetColor(0x4C97FFFF)
@@ -104,7 +106,7 @@ draw :: proc(browser: ^Browser) {
 	if browser.debug {
 		text := fmt.ctprintf("FPS: %d", GetFPS())
 		measure := MeasureText(text, 24)
-		DrawText(text, WINDOW_WIDTH - measure - WINDOW_PAD_X, WINDOW_HEIGHT - 24 - WINDOW_PAD_Y, 24, WHITE)
+		DrawText(text, WINDOW_WIDTH - measure - i32(WINDOW_PAD_X), WINDOW_HEIGHT - 24 - i32(WINDOW_PAD_Y), 24, WHITE)
 	}
 }
 
