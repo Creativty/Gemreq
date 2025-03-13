@@ -119,10 +119,11 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 draw_omnibar :: proc(browser: ^Browser) {
 	using raylib
 
+	ui := ui_scaling_pixels()
 	omnibar := &browser.omnibar
 
 	// Background
-	DrawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, ColorAlpha(color_background, 0.4))
+	DrawRectangleRec({ 0, 0, ui.window.x, ui.window.y }, ColorAlpha(color_background, 0.333))
 
 	font_size := Font_Size.Regular
 	font_size_f32 := font_size_float(font_size)
@@ -130,7 +131,7 @@ draw_omnibar :: proc(browser: ^Browser) {
 	// Frame
 	input_pad := [2]f32{ font_size_f32 * 2.0, font_size_f32 } / 2.0
 	input_height := font_size_f32 + input_pad.y * 2
-	input_frame := Rectangle{ f32(WINDOW_PAD_X), f32(WINDOW_PAD_Y), f32(VIEW_WIDTH), input_height }
+	input_frame := Rectangle{ ui.padding.x, ui.padding.y, ui.view.x, input_height }
 	DrawRectangleRec(input_frame, GetColor(0xE6E6E6FF) if omnibar.disabled else WHITE)
 	DrawRectangleLinesEx(input_frame, 2.0, GetColor(0xE6E6FFFF) if omnibar.disabled else GetColor(0xE6D6FFFF))
 

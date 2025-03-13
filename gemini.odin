@@ -231,7 +231,7 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 	// Timing end
 	time.stopwatch_stop(&timing)
 	timing_duration := time.stopwatch_duration(timing)
-	log.debugf("request_document :: timing %v.", timing_duration)
+	log.debugf("took %v.", timing_duration)
 
 	resp_tmp := strings.to_string(buff_b)
 	response  = strings.clone(resp_tmp)
@@ -243,6 +243,7 @@ Element :: struct {
 	size: [2]f32,
 	offset: f32,
 	gemtext: Gemtext,
+	is_preformatted: bool,
 }
 
 Document :: struct {
@@ -250,65 +251,44 @@ Document :: struct {
 	source: string,
 	height: f32,
 	elements: [dynamic]Element,
+	gemtexts: [dynamic]Gemtext,
 }
 
 parse_document :: proc(browser: ^Browser, source: string, source_do_clone := false) -> (document: Document) {
 	document.source = strings.clone(source) if source_do_clone else source
+	document.gemtexts = make([dynamic]Gemtext)
 	document.elements = make([dynamic]Element)
 
 	timing: time.Stopwatch
 	time.stopwatch_start(&timing)
+	defer {
+		time.stopwatch_stop(&timing)
+
+		timing_duration := time.stopwatch_duration(timing)
+		log.debugf("timing %v.", timing_duration)
+	}
 
 	r := reader_make(document.source)
 	document.status = reader_read_int(&r)
 	if document.status != 20 do log.panicf("todo: implement more status codes, received = %d", document.status)
-	log.debugf("parse_document :: status %d", document.status)
+	log.debugf("status %d", document.status)
 
 	reader_skip_whitespace(&r)
 	mime := reader_read_delimiter(&r, "\r\n")
 	mime_parts := strings.split_multi(mime, { ";", " " })
 	defer delete(mime_parts)
 	if len(mime_parts) < 1 || mime_parts[0] != "text/gemini" do log.panicf("todo: implement more media types, received = %s", mime)
-	log.debugf("parse_document :: mime %s", mime)
+	log.debugf("mime %s", mime)
 
 	in_preformat: bool
+	clear_document_layout(&document)
 	config_empty := gemtext_options(browser, .Empty)
 	for !reader_eof(&r) {
-		// NOTE(XENOBAS): Gemtext uses \n for delimiters unlike Gemini data response
-		line := reader_read_delimiter(&r, "\n")
+		line := reader_read_delimiter(&r, "\n") // NOTE(XENOBAS): Gemtext uses \n for delimiters unlike Gemini data response
 		gemtext := gemtext_parse(line, in_preformat)
-		switch gemtext.kind {
-		case .Text, .Blockquote, .List, .Heading_1, .Heading_2, .Heading_3:
-			config := gemtext_options(browser, gemtext.kind)
-			lines := text_wrap(browser, gemtext.data.(string), config, VIEW_WIDTH)
-			for line in lines {
-				gemtext_line := Gemtext{ gemtext.kind, line.text }
-				append(&document.elements, Element{ line.size, document.height, gemtext_line })
-				document.height += line.size.y
-				document.height += font_size_float(config_empty.font_size) * 0.4
-			}
-		case .Link:
-			config := gemtext_options(browser, .Link)
-			gemtext := gemtext.data.(Gemtext_Link)
-			lines := text_wrap(browser, gemtext.text, config, VIEW_WIDTH)
-			for line in lines {
-				gemtext_line := Gemtext{ .Link, Gemtext_Link{ line.text, gemtext.url } }
-				append(&document.elements, Element{ line.size, document.height, gemtext_line })
-				document.height += line.size.y
-				document.height += font_size_float(config_empty.font_size) * 0.4
-			}
-		case .Empty, .Preformatting_Delimiter:
-			if gemtext.kind == .Preformatting_Delimiter do in_preformat = !in_preformat
-			height := font_size_float(config_empty.font_size) if gemtext.kind == .Empty else 0.0
-			append(&document.elements, Element{ { 0, height }, document.height, gemtext })
-			document.height += height
-		}
+		append(&document.gemtexts, gemtext)
 	}
-	time.stopwatch_stop(&timing)
-
-	timing_duration := time.stopwatch_duration(timing)
-	log.debugf("parse_document :: timing %v.", timing_duration)
-
+	update_document_layout(browser, &document)
 	return
 }
 

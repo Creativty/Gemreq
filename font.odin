@@ -43,7 +43,8 @@ font_load :: proc(browser: ^Browser, name: string, path: cstring) {
 	for _, size in asset {
 		using raylib
 		asset[size] = LoadFontEx(path, font_size_int(size), nil, 4497)
+		SetTextureFilter(asset[size].texture, .BILINEAR)
 	}
 	browser.fonts[name] = asset
-	log.debugf("font %s \"%s\" loaded", name, path)
+	log.debugf("name %s path \"%s\" loaded", name, path)
 }

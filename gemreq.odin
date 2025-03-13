@@ -16,20 +16,14 @@ Result_Document :: union {
 	Document,
 }
 
-LERP_FACTOR		:= f64(0.3)
-SCALE_FACTOR	:= f64(2.0)
+/* 
+* ELEMENT   PIXELS  ::    RATIOS
+* WINDOW  [600,800] :: [1.00, 1.00]
+* PADDING [ 40, 20] :: [0.07, 0.05]
+*/
 
-WINDOW_PAD_X	:= 32 * SCALE_FACTOR
-WINDOW_PAD_Y	:= 16 * SCALE_FACTOR
-
-VIEW_WIDTH		:= 500 * SCALE_FACTOR
-VIEW_HEIGHT		:= 600 * SCALE_FACTOR
-
-TEXT_FACTOR		:= f64(1.0) * SCALE_FACTOR
-SCROLL_FACTOR	:= VIEW_HEIGHT / 3 * 2
-
-WINDOW_WIDTH	:= i32((WINDOW_PAD_X * 2) + VIEW_WIDTH)
-WINDOW_HEIGHT	:= i32((WINDOW_PAD_Y * 2) + VIEW_HEIGHT)
+LERP_FACTOR		:= 0.3
+SCROLL_FACTOR	:= 0.6
 
 color_text := raylib.GetColor(0xE8EAEDFF)
 color_link := raylib.GetColor(0x4C97FFFF)
@@ -75,6 +69,8 @@ unload :: proc(browser: ^Browser) {
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
+	must_reload_layout := ui_scaling_update()
+
 	browser.hover = nil
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 
@@ -92,7 +88,7 @@ update :: proc(browser: ^Browser, dt: f64) {
 		browser.navigate_queue = nil
 	}
 	update_omnibar(browser, dt)
-	update_document(browser, dt)
+	update_document(browser, dt, must_reload_layout)
 }
 
 draw :: proc(browser: ^Browser) {
@@ -106,9 +102,12 @@ draw :: proc(browser: ^Browser) {
 		draw_omnibar(browser)
 	}
 	if browser.debug {
+		// TODO(XENOBAS): Reimplement with new layout logic
+		ui := ui_scaling_pixels()
 		text := fmt.ctprintf("FPS: %d", GetFPS())
-		measure := MeasureText(text, 24)
-		DrawText(text, WINDOW_WIDTH - measure - i32(WINDOW_PAD_X), WINDOW_HEIGHT - 24 - i32(WINDOW_PAD_Y), 24, WHITE)
+		font := browser.fonts[FONT_SANS_REGULAR][.Small]
+		measure := MeasureTextEx(font, text, 24.0, 1.0)
+		DrawTextEx(font, text, ui.padding / 4, 24.0, 1.0, WHITE)
 	}
 }
 
@@ -120,13 +119,13 @@ main :: proc() {
 
 	SetTraceLogLevel(.WARNING)
 	SetTargetFPS(120)
-	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT })
+	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT, .WINDOW_RESIZABLE })
 
-	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Gemreq: Gemini browser")
-	log.infof("window created %dx%d", WINDOW_WIDTH, WINDOW_HEIGHT)
+	InitWindow(i32(WINDOW_WIDTH), i32(WINDOW_HEIGHT), "Gemreq - Gemini browser")
+	log.infof("window created %02.2fx%02.2f", WINDOW_WIDTH, WINDOW_HEIGHT)
 	defer {
-		log.info("browser loop completed")
 		CloseWindow()
+		log.info("browser loop completed")
 	}
 
 	SetExitKey(.KEY_NULL)
