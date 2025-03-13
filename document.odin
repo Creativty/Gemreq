@@ -20,8 +20,6 @@ update_document :: proc(browser: ^Browser, dt: f64) {
 }
 
 draw_document :: proc(browser: ^Browser, document: Document) {
-	preview: Maybe(string)
-
 	if document.status != 20 do return
 	for element in document.elements {
 		offset, gemtext := f64(element.offset) - browser.scroll.current, element.gemtext
@@ -39,19 +37,21 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 		raylib.DrawTextEx(font, text, { x, f32(WINDOW_PAD_Y) + f32(offset) }, size, config.spacing, config.color)
 		if gemtext.kind == .Link {
 			box := raylib.Rectangle{ f32(WINDOW_PAD_X), f32(WINDOW_PAD_Y) + f32(offset), element.size.x, element.size.y }
+			url := gemtext.data.(Gemtext_Link).url
 			mouse := raylib.GetMousePosition()
-			if raylib.CheckCollisionPointRec(mouse, box) {
+			hover_url, hover_matches := browser.hover.(string)
+			hover_collision := raylib.CheckCollisionPointRec(mouse, box)
+			if hover_collision || (hover_matches && hover_url == url) {
+				browser.hover = url
 				raylib.DrawRectangle(i32(WINDOW_PAD_X), i32(WINDOW_PAD_Y + offset + f64(element.size.y)), i32(element.size.x), 1, config.color)
-				url := gemtext.data.(Gemtext_Link).url
-				preview = url
 				// Instigate navigation
-				if raylib.IsMouseButtonPressed(.LEFT) do navigate_click(browser, url)
+				if raylib.IsMouseButtonPressed(.LEFT) && hover_collision do navigate_click(browser, url)
 			}
 		}
 	}
 
 	// Draw url preview
-	if url, url_visible := preview.(string); url_visible do draw_preview_url(browser, url)
+	if url, url_visible := browser.hover.(string); url_visible do draw_preview_url(browser, url)
 	if browser.omnibar.disabled {
 		time := raylib.GetTime() - browser.omnibar.disabled_timestamp
 		wave := f32(math.sin(time * 2.0) * (WINDOW_PAD_X / 4.0))

@@ -38,19 +38,20 @@ color_background := raylib.GetColor(0x101218FF)
 Browser :: struct {
 	fonts: map[string]Font_Asset,
 	debug: bool,
+	hover: Maybe(string),
+	omnibar: Omnibar,
 	document: Maybe(Document),
 	endpoint: Maybe(Endpoint),
 	navigate_queue: Maybe(string),
+	network_thread: ^Thread,
 	scroll: struct {
 		current: f64,
 		target: f64,
 	},
-	network_thread: ^Thread,
 	channels: struct {
 		request: Channel_Request,
 		document: Channel_Document,
 	},
-	omnibar: Omnibar,
 }
 
 launch :: proc(browser: ^Browser) {
@@ -74,6 +75,7 @@ unload :: proc(browser: ^Browser) {
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
+	browser.hover = nil
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 
 	key_debug := raylib.IsKeyPressed(.F3)
