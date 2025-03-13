@@ -114,7 +114,7 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 	if url, url_visible := browser.hover.(string); url_visible do draw_preview_url(browser, url)
 	if browser.omnibar.disabled {
 		time := raylib.GetTime() - browser.omnibar.disabled_timestamp
-		sine := f32(math.sin(time * 2.0)) * 0.5 + 0.5
+		sine := f32(math.sin(time * 2.0) * 0.25) + 0.75
 		axis := min(ui.padding.x, ui.padding.y)
 		radius := sine * axis / 5.0
 		raylib.DrawCircleV({ ui.window.x - axis / 2.0, ui.window.y - axis / 2.0 }, radius, color_link)
