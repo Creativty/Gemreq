@@ -136,7 +136,7 @@ draw_omnibar :: proc(browser: ^Browser) {
 	DrawRectangleLinesEx(input_frame, 2.0, GetColor(0xE6E6FFFF) if omnibar.disabled else GetColor(0xE6D6FFFF))
 
 	// Text
-	text := strings.to_cstring(&omnibar.builder)
+	text, _ := strings.to_cstring(&omnibar.builder)
 	spacing := f32(1.2)
 
 	font := browser.fonts[FONT_SANS_BOLD][font_size]

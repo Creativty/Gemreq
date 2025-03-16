@@ -40,6 +40,7 @@ Browser :: struct {
 	endpoint: Maybe(Endpoint),
 	navigate_queue: Maybe(string),
 	network_thread: ^Thread,
+	cursor_shape: raylib.MouseCursor,
 	scroll: struct {
 		current: f64,
 		target: f64,
@@ -52,6 +53,7 @@ Browser :: struct {
 
 launch :: proc(browser: ^Browser) {
 	browser.document = nil
+	browser.cursor_shape = .DEFAULT
 
 	browser.fonts = make(map[string]Font_Asset)
 	font_load(browser, FONT_SANS_REGULAR, "font/NotoSans-Regular.ttf")
@@ -73,6 +75,12 @@ unload :: proc(browser: ^Browser) {
 update :: proc(browser: ^Browser, dt: f64) {
 	must_reload_layout := ui_scaling_update()
 
+	cursor_shape := raylib.MouseCursor.DEFAULT
+	if browser.hover != nil do cursor_shape = .POINTING_HAND
+	if cursor_shape  != browser.cursor_shape {
+		raylib.SetMouseCursor(cursor_shape)
+		browser.cursor_shape = cursor_shape
+	}
 	browser.hover = nil
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 

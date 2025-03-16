@@ -3,6 +3,11 @@ package gemreq
 import "core:strings"
 import "vendor:raylib"
 
+Text_Line :: struct {
+	text: string,
+	size: [2]f32,
+}
+
 Text_Options :: struct {
 	font_name: string,
 	font_size: Font_Size,
@@ -10,15 +15,10 @@ Text_Options :: struct {
 	color: raylib.Color,
 }
 
-Line :: struct {
-	text: string,
-	size: [2]f32,
-}
-
-text_wrap :: proc(browser: ^Browser, source: string, config: Text_Options, width: f64) -> []Line {
+text_wrap :: proc(browser: ^Browser, source: string, config: Text_Options, width: f64) -> []Text_Line {
 	font := browser.fonts[config.font_name][config.font_size]
 	font_size := font_size_float(config.font_size)
-	lines := make([dynamic]Line)
+	lines := make([dynamic]Text_Line)
 	reader := reader_make(source)
 	if len(source) == 0 do return lines[:]
 
@@ -52,7 +52,7 @@ text_wrap :: proc(browser: ^Browser, source: string, config: Text_Options, width
 		if index_best_fit != 0 do reader.index_curr = index_best_fit
 		if len(text_best_fit) > 0 {
 			token := strings.trim_space(reader_consume(&reader))
-			line := Line{ token, measure_best_fit }
+			line := Text_Line{ token, measure_best_fit }
 			append(&lines, line)
 		}
 	}
