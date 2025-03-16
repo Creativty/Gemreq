@@ -74,6 +74,7 @@ parse_endpoint :: proc(src: string) -> (ep: Endpoint){
 	return ep
 }
 
+// TODO(XENOBAS): Implement URI encoding.
 // TODO(XENOBAS): Add support for ../. relative path
 resolve_endpoint :: proc(browser: ^Browser, url: string) -> (ep: Endpoint, is_external: bool) {
 	url := url

@@ -29,7 +29,6 @@ Gemtext :: struct {
 	data: Gemtext_Data,
 }
 
-// TODO(XENOBAS): Rename this function
 gemtext_options :: proc(browser: ^Browser, kind: Gemtext_Kind) -> Text_Options {
 	#partial switch kind {
 	case .Heading_1, .Heading_2:

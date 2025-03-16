@@ -16,14 +16,6 @@ Result_Document :: union {
 	Document,
 }
 
-/* 
-* ELEMENT   PIXELS  ::    RATIOS
-* WINDOW  [600,800] :: [1.00, 1.00]
-* PADDING [ 40, 20] :: [0.07, 0.05]
-*/
-
-// TODO(XENOBAS): Implement URI encoding.
-
 LERP_FACTOR		:= 0.2
 SCROLL_FACTOR	:= 0.6
 
@@ -112,7 +104,6 @@ draw :: proc(browser: ^Browser) {
 		draw_omnibar(browser)
 	}
 	if browser.debug {
-		// TODO(XENOBAS): Reimplement with new layout logic
 		ui := ui_scaling_pixels()
 		text := fmt.ctprintf("FPS: %d", GetFPS())
 		font := browser.fonts[FONT_SANS_REGULAR][.Small]
@@ -121,6 +112,7 @@ draw :: proc(browser: ^Browser) {
 	}
 }
 
+// TODO(XENOBAS): Add a custom border with .WINDOW_UNDECORATED with resize and title close functionality
 main :: proc() {
 	using raylib
 
@@ -128,7 +120,7 @@ main :: proc() {
 	defer log.destroy_console_logger(context.logger)
 
 	SetTraceLogLevel(.WARNING)
-	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT, .WINDOW_RESIZABLE }) // TODO(XENOBAS): Add .WINDOW_UNDECORATED
+	SetConfigFlags({ .MSAA_4X_HINT, .BORDERLESS_WINDOWED_MODE, .INTERLACED_HINT, .WINDOW_RESIZABLE })
 	SetTargetFPS(120)
 
 	InitWindow(i32(WINDOW_WIDTH), i32(WINDOW_HEIGHT), "Gemreq - Gemini browser")
