@@ -31,15 +31,17 @@ parse_scheme :: proc(reader: ^Reader) -> (scheme: string, ok: bool) {
 
 parse_authority_host :: proc(reader: ^Reader) -> (host: string, ok: bool) {
 	is_host_ipv6 :: proc(_: int, c: rune) -> bool {
-		return c != ']'
+		return is_hex(c) || c == ':'
 	}
 	is_host_ipv4_regname :: proc(_: int, c: rune) -> bool {
 		return c != ':'
 	}
 	is_host := is_host_ipv4_regname
-	if reader_next_if_rune(reader, '[') == '[' do is_host = is_host_ipv6
+	if reader_next_if_rune(reader, '[') != rune(0) do is_host = is_host_ipv6
 	reader_next_while(reader, is_host)
-	if is_host == is_host_ipv6 do reader_next_if_rune(reader, ']')
+	if is_host == is_host_ipv6 {
+		if reader_next_if_rune(reader, ']') == rune(0) do return reader_consume(reader), false
+	}
 	host = strings.clone(reader_consume(reader))
 	return host, true
 }

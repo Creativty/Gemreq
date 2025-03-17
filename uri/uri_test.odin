@@ -42,23 +42,28 @@ test_parse :: proc(t: ^testing.T) {
 	testing.expect_value(t, scheme_tel.scheme, "tel")
 	testing.expect_value(t, scheme_tel.authority, nil)
 
-	scheme_https, scheme_https_ok := parse("https://youtube.com/watch?v=3b3f9087a")
+	scheme_https, scheme_https_ok := parse("https://youtube.com:443/watch?v=3b3f9087a")
 	defer destroy(scheme_https)
 	testing.expect_value(t, scheme_https_ok, true)
 	testing.expect_value(t, scheme_https.scheme, "https")
 	if testing.expect(t, scheme_https.authority != nil) {
 		authority := scheme_https.authority.(Authority)
 		testing.expect_value(t, authority.host, "youtube.com")
-		testing.expect_value(t, authority.port, "")
+		testing.expect_value(t, authority.port, "443")
 	}
 
-	host_ipv6_scheme_gemini, host_ipv6_scheme_gemini_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:443/")
+	host_ipv6_scheme_gemini, host_ipv6_scheme_gemini_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]")
 	defer destroy(host_ipv6_scheme_gemini)
 	testing.expect_value(t, host_ipv6_scheme_gemini_ok, true)
 	testing.expect_value(t, host_ipv6_scheme_gemini.scheme, "gemini")
 	if testing.expect(t, host_ipv6_scheme_gemini.authority != nil) {
 		authority := host_ipv6_scheme_gemini.authority.(Authority)
 		testing.expect_value(t, authority.host, "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]")
-		testing.expect_value(t, authority.port, "443")
+		testing.expect_value(t, authority.port, "")
 	}
+
+	host_ipv6_unterminated, host_ipv6_unterminated_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334")
+	defer destroy(host_ipv6_unterminated)
+	testing.expect_value(t, host_ipv6_unterminated_ok, false)
+	testing.expect_value(t, host_ipv6_unterminated.scheme, "gemini")
 }
