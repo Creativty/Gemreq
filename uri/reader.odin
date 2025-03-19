@@ -90,3 +90,7 @@ reader_peek_token :: proc(r: ^Reader) -> (token: string) {
 	token = r.buffer[r.index_last:][:r.index_curr - r.index_last]
 	return token
 }
+
+reader_slice :: proc(r: ^Reader) -> string {
+	return r.buffer[r.index_curr:]
+}

@@ -14,8 +14,8 @@ Authority :: struct {
 
 URI :: struct {
 	path: string,
-	// query: map[string]string,
-	// fragment: Maybe(string),
+	query: string,
+	fragment: string,
 	scheme: string,
 	authority: Maybe(Authority),
 }
@@ -23,12 +23,11 @@ URI :: struct {
 parse_scheme :: proc(reader: ^Reader) -> (scheme: string, ok: bool) {
 	is_scheme :: proc(i: int, c: rune) -> bool {
 		if i == 0 do return is_alpha(c)
-		return is_scheme_suffix(c)
+		else do return is_scheme_suffix(c)
 	}
 	reader_next_while(reader, is_scheme)
-	reader_next_if_rune(reader, ':')
+	if reader_next_if_rune(reader, ':') == rune(0) do reader_unwalk(reader)
 	scheme = strings.trim_right(reader_consume(reader), ":")
-	if len(scheme) == 0 do return scheme, false
 	return strings.clone(scheme), true
 }
 
@@ -51,7 +50,7 @@ parse_authority_host :: proc(reader: ^Reader) -> (host: string, ok: bool) {
 		return is_hex(c) || c == ':'
 	}
 	is_host_ipv4_regname :: proc(_: int, c: rune) -> bool {
-		return c != ':'
+		return !is_reserved(c)
 	}
 	is_host := is_host_ipv4_regname
 	if reader_next_if_rune(reader, '[') != rune(0) do is_host = is_host_ipv6
@@ -68,15 +67,16 @@ parse_authority :: proc(reader: ^Reader) -> (authority_optional: Maybe(Authority
 		return c == '/'
 	}
 	if slashes_len := reader_skip_while(reader, is_authority_prefix); slashes_len < 2 {
-		reader.index_curr -= slashes_len
+		reader_unwalk(reader)
 		return nil, true
 	}
 
-	is_authority :: proc(_: int, c: rune) -> bool {
-		return c != '#' && c != '/'
+	is_authority_rune :: proc(_: int, c: rune) -> bool {
+		return c != '#' && c != '/' && c != '?'
 	}
-	reader_next_while(reader, is_authority)
+	reader_next_while(reader, is_authority_rune)
 	authority_text := reader_consume(reader)
+	if authority_text == "" do return nil, true
 	authority_reader := reader_make(authority_text)
 
 	authority: Authority
@@ -93,25 +93,44 @@ parse_authority :: proc(reader: ^Reader) -> (authority_optional: Maybe(Authority
 	return authority, true
 }
 
-parse_path :: proc(reader: ^Reader) -> (path: string) {
+parse_path :: proc(reader: ^Reader, authority_omitted := true) -> (path: string) {
 	// Reference: https://datatracker.ietf.org/doc/html/rfc3986#section-3.3
-	is_not_delimiter :: proc(_: int, c: rune) -> bool {
-		return c != '#'
+	is_path_rune :: proc(_: int, c: rune) -> bool {
+		return c != '#' && c != '?'
 	}
-	reader_next_while(reader, is_not_delimiter)
-	reader_next_if_rune(reader, '#')
-	path_source := strings.trim_right(reader_consume(reader), "#")
+	reader_next_while(reader, is_path_rune)
+	path_source := reader_consume(reader)
 
 	return strings.clone(path_source)
+}
+
+parse_query :: proc(reader: ^Reader) -> (query: string) {
+	if reader_next_if_rune(reader, '?') == rune(0) do return strings.clone("")
+	is_query_rune :: proc(_: int, c: rune) -> bool {
+		return c != '#'
+	}
+	reader_next_while(reader, is_query_rune)
+	return strings.clone(reader_consume(reader))
+}
+
+parse_fragment :: proc(reader: ^Reader) -> (fragment: string) {
+	if reader_next_if_rune(reader, '#') == rune(0) do return strings.clone("")
+	is_fragment_rune :: proc(_: int, c: rune) -> bool {
+		return !is_reserved(c)
+	}
+	reader_next_while(reader, is_fragment_rune)
+	return strings.clone(reader_consume(reader))
 }
 
 parse :: proc(source: string) -> (uri: URI, ok: bool) {
 	reader := reader_make(source)
 
-	uri.scheme = parse_scheme(&reader) or_return
-	uri.authority = parse_authority(&reader) or_return
-	uri.path = parse_path(&reader)
-	// uri.fragment = parse_fragment(&reader)
+	if len(source) == 0 do return uri, false
+	uri.scheme, _ = parse_scheme(&reader)
+	if len(uri.scheme) > 0 do uri.authority = parse_authority(&reader) or_return
+	uri.path = parse_path(&reader, uri.authority == nil)
+	uri.query = parse_query(&reader)
+	uri.fragment = parse_fragment(&reader)
 	return uri, true
 }
 
@@ -123,4 +142,6 @@ destroy :: proc(uri: URI) {
 		delete(authority.user_info)
 	}
 	delete(uri.path)
+	delete(uri.query)
+	delete(uri.fragment)
 }

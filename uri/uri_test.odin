@@ -6,12 +6,26 @@ import "core:testing"
 SOURCE_LIST :: [?]string{
 	"news:comp.infosystems.www.servers.unix",
 	"http://username:password@localhost:8080/about#contact",
-	"telnet://192.0.2.16:80/",
+	"telnet://192.0.2.16:80?add=true",
 	"tel:+1-816-555-1212",
 	"https://youtube.com:443/watch?v=3b3f9087a",
-	"mongodb+srv://myDatabaseUser:D1fficultPassw0rd@server.example.com/",
-	"gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:1965",
+	"mongodb+srv://myDatabaseUser:D1fficultPassw0rd@server.example.com/?connectionsLimit=3",
+	"gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:1965/docs/faq.gmi",
 	"file:///etc/hosts.conf",
+	"/index.html",
+	"./channels/788078738905628682/1174105404695916686",
+}
+
+@(test)
+test_parse :: proc(t: ^testing.T) {
+	uri_empty, uri_empty_ok := parse("")
+	defer destroy(uri_empty)
+	testing.expect_value(t, uri_empty_ok, false)
+
+	uri_ipv6_unterminated, uri_ipv6_unterminated_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334")
+	defer destroy(uri_ipv6_unterminated)
+	testing.expect_value(t, uri_ipv6_unterminated_ok, false)
+	testing.expect_value(t, uri_ipv6_unterminated.scheme, "gemini")
 }
 
 @(test)
@@ -25,6 +39,8 @@ test_parse_scheme :: proc(t: ^testing.T) {
 		"mongodb+srv",
 		"gemini",
 		"file",
+		"",
+		"",
 	}
 	for uri_source, index in SOURCE_LIST {
 		uri, ok := parse(uri_source)
@@ -47,6 +63,7 @@ test_parse_authority :: proc(t: ^testing.T) {
 		"[2001:0db8:85a3:0000:0000:8a2e:0370:7334]",
 		"",
 		"",
+		"",
 	}
 	port_list := [?]string{
 		"",
@@ -58,6 +75,7 @@ test_parse_authority :: proc(t: ^testing.T) {
 		"1965",
 		"",
 		"",
+		"",
 	}
 	user_info_list := [?]string{
 		"",
@@ -66,6 +84,7 @@ test_parse_authority :: proc(t: ^testing.T) {
 		"",
 		"",
 		"myDatabaseUser:D1fficultPassw0rd",
+		"",
 		"",
 		"",
 		"",
@@ -88,32 +107,74 @@ test_parse_authority :: proc(t: ^testing.T) {
 @(test)
 test_parse_path :: proc(t: ^testing.T) {
 	path_list := [?]string{
-		"",
+		"comp.infosystems.www.servers.unix",
 		"/about",
-		"/",
 		"",
-		"/watch?v=3b3f9087a",
+		"+1-816-555-1212",
+		"/watch",
 		"/",
-		"",
+		"/docs/faq.gmi",
 		"/etc/hosts.conf",
+		"/index.html",
+		"./channels/788078738905628682/1174105404695916686",
 	}
 	for uri_source, index in SOURCE_LIST {
 		uri, ok := parse(uri_source)
 		defer destroy(uri)
 
 		testing.expect_value(t, ok, true)
-		testing.expect_value(t, uri.path, path_list[index])
+		if !testing.expect_value(t, uri.path, path_list[index]) {
+			log.infof("%s :: %#v", uri_source, uri)
+		}
 	}
 }
 
 @(test)
-test_parse :: proc(t: ^testing.T) {
-	uri_empty, uri_empty_ok := parse("")
-	defer destroy(uri_empty)
-	testing.expect_value(t, uri_empty_ok, false)
+test_parse_query :: proc(t: ^testing.T) {
+	query_list := [?]string{
+		"",
+		"",
+		"?add=true",
+		"",
+		"?v=3b3f9087a",
+		"?connectionsLimit=3",
+		"",
+		"",
+		"",
+		"",
+	}
+	for uri_source, index in SOURCE_LIST {
+		uri, ok := parse(uri_source)
+		defer destroy(uri)
 
-	uri_ipv6_unterminated, uri_ipv6_unterminated_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334")
-	defer destroy(uri_ipv6_unterminated)
-	testing.expect_value(t, uri_ipv6_unterminated_ok, false)
-	testing.expect_value(t, uri_ipv6_unterminated.scheme, "gemini")
+		testing.expect_value(t, ok, true)
+		if !testing.expect_value(t, uri.query, query_list[index]) {
+			log.infof("%s :: %#v", uri_source, uri)
+		}
+	}
+}
+
+@(test)
+test_parse_fragment :: proc(t: ^testing.T) {
+	fragment_list := [?]string{
+		"",
+		"#contact",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+	}
+	for uri_source, index in SOURCE_LIST {
+		uri, ok := parse(uri_source)
+		defer destroy(uri)
+
+		testing.expect_value(t, ok, true)
+		if !testing.expect_value(t, uri.fragment, fragment_list[index]) {
+			log.infof("%s :: %#v", uri_source, uri)
+		}
+	}
 }
