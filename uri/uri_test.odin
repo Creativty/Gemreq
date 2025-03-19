@@ -3,67 +3,117 @@ package uri
 import "core:log"
 import "core:testing"
 
+SOURCE_LIST :: [?]string{
+	"news:comp.infosystems.www.servers.unix",
+	"http://username:password@localhost:8080/about#contact",
+	"telnet://192.0.2.16:80/",
+	"tel:+1-816-555-1212",
+	"https://youtube.com:443/watch?v=3b3f9087a",
+	"mongodb+srv://myDatabaseUser:D1fficultPassw0rd@server.example.com/",
+	"gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:1965",
+	"file:///etc/hosts.conf",
+}
+
+@(test)
+test_parse_scheme :: proc(t: ^testing.T) {
+	scheme_list := [?]string{
+		"news",
+		"http",
+		"telnet",
+		"tel",
+		"https",
+		"mongodb+srv",
+		"gemini",
+		"file",
+	}
+	for uri_source, index in SOURCE_LIST {
+		uri, ok := parse(uri_source)
+		defer destroy(uri)
+
+		testing.expect_value(t, ok, true)
+		testing.expect_value(t, uri.scheme, scheme_list[index])
+	}
+}
+
+@(test)
+test_parse_authority :: proc(t: ^testing.T) {
+	host_list := [?]string{
+		"",
+		"localhost",
+		"192.0.2.16",
+		"",
+		"youtube.com",
+		"server.example.com",
+		"[2001:0db8:85a3:0000:0000:8a2e:0370:7334]",
+		"",
+		"",
+	}
+	port_list := [?]string{
+		"",
+		"8080",
+		"80",
+		"",
+		"443",
+		"",
+		"1965",
+		"",
+		"",
+	}
+	user_info_list := [?]string{
+		"",
+		"username:password",
+		"",
+		"",
+		"",
+		"myDatabaseUser:D1fficultPassw0rd",
+		"",
+		"",
+		"",
+	}
+	for uri_source, index in SOURCE_LIST {
+		uri, ok := parse(uri_source)
+		defer destroy(uri)
+
+		testing.expect_value(t, ok, true)
+		if len(port_list[index]) == 0 && len(host_list[index]) == 0 {
+			testing.expect_value(t, uri.authority, nil)
+		} else if authority, ok := uri.authority.(Authority); testing.expect_value(t, ok, true) {
+			testing.expect_value(t, authority.port, port_list[index])
+			testing.expect_value(t, authority.host, host_list[index])
+			testing.expect_value(t, authority.user_info, user_info_list[index])
+		}
+	}
+}
+
+@(test)
+test_parse_path :: proc(t: ^testing.T) {
+	path_list := [?]string{
+		"",
+		"/about",
+		"/",
+		"",
+		"/watch?v=3b3f9087a",
+		"/",
+		"",
+		"/etc/hosts.conf",
+	}
+	for uri_source, index in SOURCE_LIST {
+		uri, ok := parse(uri_source)
+		defer destroy(uri)
+
+		testing.expect_value(t, ok, true)
+		testing.expect_value(t, uri.path, path_list[index])
+	}
+}
+
 @(test)
 test_parse :: proc(t: ^testing.T) {
-	// parse :: proc(source: string) -> (uri: URI, ok: bool)
-	scheme_empty, scheme_empty_ok := parse("")
-	defer destroy(scheme_empty)
-	testing.expect(t, scheme_empty_ok == false, "empty string gave a false positive")
+	uri_empty, uri_empty_ok := parse("")
+	defer destroy(uri_empty)
+	testing.expect_value(t, uri_empty_ok, false)
 
-	scheme_news, scheme_news_ok := parse("news:comp.infosystems.www.servers.unix")
-	defer destroy(scheme_news)
-	testing.expect_value(t, scheme_news_ok, true)
-	testing.expect_value(t, scheme_news.scheme, "news")
-	testing.expect(t, scheme_news.authority == nil)
-
-	scheme_http, scheme_http_ok := parse("http://localhost:8080/about#contact")
-	defer destroy(scheme_http)
-	testing.expect_value(t, scheme_http_ok, true)
-	testing.expect_value(t, scheme_http.scheme, "http")
-	if testing.expect(t, scheme_http.authority != nil) {
-		authority := scheme_http.authority.(Authority)
-		testing.expect_value(t, authority.host, "localhost")
-		testing.expect_value(t, authority.port, "8080")
-	}
-
-	host_ipv4_scheme_telnet, host_ipv4_scheme_telnet_ok := parse("telnet://192.0.2.16:80/")
-	defer destroy(host_ipv4_scheme_telnet)
-	testing.expect_value(t, host_ipv4_scheme_telnet_ok, true)
-	testing.expect_value(t, host_ipv4_scheme_telnet.scheme, "telnet")
-	if testing.expect(t, host_ipv4_scheme_telnet.authority != nil) {
-		authority := host_ipv4_scheme_telnet.authority.(Authority)
-		testing.expect_value(t, authority.host, "192.0.2.16")
-		testing.expect_value(t, authority.port, "80")
-	}
-
-	scheme_tel, scheme_tel_ok := parse("tel:+1-816-555-1212")
-	defer destroy(scheme_tel)
-	testing.expect_value(t, scheme_tel_ok, true)
-	testing.expect_value(t, scheme_tel.scheme, "tel")
-	testing.expect_value(t, scheme_tel.authority, nil)
-
-	scheme_https, scheme_https_ok := parse("https://youtube.com:443/watch?v=3b3f9087a")
-	defer destroy(scheme_https)
-	testing.expect_value(t, scheme_https_ok, true)
-	testing.expect_value(t, scheme_https.scheme, "https")
-	if testing.expect(t, scheme_https.authority != nil) {
-		authority := scheme_https.authority.(Authority)
-		testing.expect_value(t, authority.host, "youtube.com")
-		testing.expect_value(t, authority.port, "443")
-	}
-
-	host_ipv6_scheme_gemini, host_ipv6_scheme_gemini_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]")
-	defer destroy(host_ipv6_scheme_gemini)
-	testing.expect_value(t, host_ipv6_scheme_gemini_ok, true)
-	testing.expect_value(t, host_ipv6_scheme_gemini.scheme, "gemini")
-	if testing.expect(t, host_ipv6_scheme_gemini.authority != nil) {
-		authority := host_ipv6_scheme_gemini.authority.(Authority)
-		testing.expect_value(t, authority.host, "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]")
-		testing.expect_value(t, authority.port, "")
-	}
-
-	host_ipv6_unterminated, host_ipv6_unterminated_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334")
-	defer destroy(host_ipv6_unterminated)
-	testing.expect_value(t, host_ipv6_unterminated_ok, false)
-	testing.expect_value(t, host_ipv6_unterminated.scheme, "gemini")
+	uri_ipv6_unterminated, uri_ipv6_unterminated_ok := parse("gemini://[2001:0db8:85a3:0000:0000:8a2e:0370:7334")
+	defer destroy(uri_ipv6_unterminated)
+	testing.expect_value(t, uri_ipv6_unterminated_ok, false)
+	testing.expect_value(t, uri_ipv6_unterminated.scheme, "gemini")
 }

@@ -46,5 +46,5 @@ font_load :: proc(browser: ^Browser, name: string, path: cstring) {
 		SetTextureFilter(asset[size].texture, .BILINEAR)
 	}
 	browser.fonts[name] = asset
-	log.debugf("name %s path \"%s\" loaded", name, path)
+	log.infof("name %s path \"%s\" loaded", name, path)
 }

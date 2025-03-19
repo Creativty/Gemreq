@@ -23,6 +23,10 @@ reader_eof :: proc(r: ^Reader) -> bool {
 	return reader_peek(r) == rune(0)
 }
 
+reader_contains :: proc(r: ^Reader, char: rune) -> (found: bool) {
+	return strings.contains_rune(r.buffer[r.index_curr:], char)
+}
+
 reader_peek :: proc(r: ^Reader) -> rune {
 	if r.index_curr >= r.length || r.index_curr < 0 do return rune(0)
 	return rune(r.buffer[r.index_curr])

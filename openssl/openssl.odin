@@ -2,7 +2,7 @@ package ssl
 
 import "core:c"
 foreign import openssl {
-	"system:ssl"
+	"system:ssl",
 	"system:libssl.so.3"
 }
 

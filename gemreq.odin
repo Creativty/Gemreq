@@ -57,7 +57,7 @@ launch :: proc(browser: ^Browser) {
 unload :: proc(browser: ^Browser) {
 	for name, asset in browser.fonts {
 		for font in asset do raylib.UnloadFont(font)
-		log.debugf("font %s unloaded", name)
+		log.infof("font %s unloaded", name)
 	}
 	delete(browser.fonts)
 
