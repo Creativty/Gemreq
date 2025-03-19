@@ -2,19 +2,11 @@ package gemreq
 
 import "core:fmt"
 import "core:log"
+import "core:sync"
 import "core:thread"
-import "core:sync/chan"
 import "core:strings"
+import "core:sync/chan"
 import "vendor:raylib"
-
-Thread :: thread.Thread
-Channel_Request :: chan.Chan(Endpoint)
-Channel_Document :: chan.Chan(Result_Document)
-
-Result_Document :: union {
-	Gemini_Error,
-	Document,
-}
 
 LERP_FACTOR		:= 0.2
 SCROLL_FACTOR	:= 0.6
@@ -23,6 +15,10 @@ color_text := raylib.GetColor(0xE8EAEDFF)
 color_link := raylib.GetColor(0x4C97FFFF)
 color_background := raylib.GetColor(0x101218FF)
 
+Thread :: thread.Thread
+Channel_Request :: chan.Chan(Endpoint)
+Channel_Document :: chan.Chan(Result_Document)
+
 Browser :: struct {
 	fonts: map[string]Font_Asset,
 	debug: bool,
@@ -30,6 +26,7 @@ Browser :: struct {
 	omnibar: Omnibar,
 	document: Maybe(Document),
 	endpoint: Maybe(Endpoint),
+	endpoint_mutex: sync.Mutex,
 	navigate_queue: Maybe(string),
 	network_thread: ^Thread,
 	cursor_shape: raylib.MouseCursor,
@@ -41,6 +38,11 @@ Browser :: struct {
 		request: Channel_Request,
 		document: Channel_Document,
 	},
+}
+
+Result_Document :: union {
+	Gemini_Error,
+	Document,
 }
 
 launch :: proc(browser: ^Browser) {
@@ -167,7 +169,7 @@ main :: proc() {
 				browser.omnibar.error = nil
 			}
 
-			browser.endpoint = endpoint
+			if sync.mutex_guard(&browser.endpoint_mutex) do browser.endpoint = endpoint
 
 			document := parse_document(browser, resp)
 			if document_old, document_exists := browser.document.(Document); document_exists {

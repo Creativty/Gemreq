@@ -8,6 +8,7 @@ import "core:log"
 import "core:mem"
 import "core:net"
 import "core:time"
+import "core:sync"
 import "core:strconv"
 import "core:strings"
 import "core:sys/posix"
@@ -78,12 +79,11 @@ parse_endpoint :: proc(src: string) -> (ep: Endpoint){
 // TODO(XENOBAS): Add support for ../. relative path
 resolve_endpoint :: proc(browser: ^Browser, url: string) -> (ep: Endpoint, is_external: bool) {
 	url := url
+	sync.mutex_guard(&browser.endpoint_mutex)
 	ep_parent, ep_parent_exists := browser.endpoint.(Endpoint)
 	if !ep_parent_exists || strings.contains(url, "://") {
 		// Absolute URL
-		if strings.has_prefix(url, "gemini://") {
-			return parse_endpoint(url), false
-		}
+		if strings.has_prefix(url, "gemini://") do return parse_endpoint(url), false
 		return ep, true
 	} else if strings.has_prefix(url, "/") || strings.has_prefix(url, "~") {
 		assert(ep_parent_exists, "invalid url expected a parent endpoint existing")

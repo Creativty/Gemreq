@@ -3,9 +3,13 @@ package gemreq
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:strconv"
 import "core:strings"
 import "core:text/edit"
+import "core:path/slashpath"
 import "vendor:raylib"
+
+import "uri"
 
 Text_Edit_State :: edit.State
 
@@ -64,26 +68,30 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 
 		key_goto := raylib.IsKeyPressed(.ENTER)
 		if key_goto {
-			url_pre_process := strings.trim_space(strings.to_string(omnibar.builder))
-			if key_control && len(url_pre_process) > 0 {
-				PROTOCOL	:: "gemini://"
-				DOMAINS		:: []string{ ".com", ".net", ".io", ".dev", "." }
+			text := strings.to_string(omnibar.builder)
+			text  = strings.trim_right_space(text)
+			if strings.has_prefix(text, " ") {
+				log.error("todo: omnibar has no search engine implementation")
+			} else if uri_text, ok := uri.parse(text); ok {
+				defer uri.destroy(uri_text)
 
-				must_add_protocol := !strings.has_prefix(url_pre_process, PROTOCOL)
-				if must_add_protocol do edit.insert(&omnibar.state, 0, PROTOCOL)
+				if uri_text.scheme != "gemini" do log.panicf("scheme invalid :: %#v", uri_text.scheme)
+				if uri_text.authority == nil do log.panicf("authority is nil :: %#v", uri_text)
 
-				must_add_domain := true
-				for domain in DOMAINS {
-					if strings.has_suffix(url_pre_process, domain) {
-						must_add_domain = false
-						break
-					}
+				authority := uri_text.authority.(uri.Authority)
+				port, _ := strconv.parse_int(authority.port)
+				endpoint := Endpoint{
+					host = strings.clone(authority.host),
+					path = make([dynamic]string),
+					port = 1965 if authority.port == "" else port,
 				}
-				if must_add_domain do edit.input_text(&omnibar.state, ".net")
-			}
 
-			url_post_process := strings.trim_space(strings.to_string(omnibar.builder))
-			navigate(browser, url_post_process)
+				path := slashpath.clean(uri_text.path)
+				defer delete(path)
+
+				for component in strings.split(path, "/") do append(&endpoint.path, strings.clone(component))
+				navigate(browser, endpoint)
+			}
 		} else {
 			key_left := raylib.IsKeyPressed(.LEFT) || raylib.IsKeyPressedRepeat(.LEFT)
 			key_right := raylib.IsKeyPressed(.RIGHT) || raylib.IsKeyPressedRepeat(.RIGHT)
