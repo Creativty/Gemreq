@@ -99,12 +99,8 @@ draw :: proc(browser: ^Browser) {
 	using raylib
 
 	ClearBackground(color_background)
-	if document, exists := browser.document.(Document); exists {
-		draw_document(browser, document)
-	}
-	if browser.omnibar.visible {
-		draw_omnibar(browser)
-	}
+	if document, exists := browser.document.(Document); exists do draw_document(browser, document)
+	if browser.omnibar.visible do draw_omnibar(browser)
 	if browser.debug {
 		ui := ui_scaling_pixels()
 		text := fmt.ctprintf("FPS: %d", GetFPS())

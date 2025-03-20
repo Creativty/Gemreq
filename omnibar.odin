@@ -72,21 +72,20 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 			text  = strings.trim_right_space(text)
 			if strings.has_prefix(text, " ") {
 				log.error("todo: omnibar has no search engine implementation")
-			} else if uri_text, ok := uri.parse(text); ok {
-				defer uri.destroy(uri_text)
+			} else if identifier, ok := uri.parse(text); ok {
+				defer uri.destroy(identifier)
 
-				if uri_text.scheme != "gemini" do log.panicf("scheme invalid :: %#v", uri_text.scheme)
-				if uri_text.authority == nil do log.panicf("authority is nil :: %#v", uri_text)
+				if identifier.scheme != "" && identifier.scheme != "gemini" do log.panicf("scheme invalid :: %#v", identifier.scheme)
+				if identifier.opaque != "" do log.panicf("opaque uri :: %#v", identifier)
 
-				authority := uri_text.authority.(uri.Authority)
-				port, _ := strconv.parse_int(authority.port)
+				port, _ := strconv.parse_int(identifier.port)
 				endpoint := Endpoint{
-					host = strings.clone(authority.host),
+					host = strings.clone(identifier.host),
 					path = make([dynamic]string),
-					port = 1965 if authority.port == "" else port,
+					port = 1965 if identifier.port == "" else port,
 				}
 
-				path := slashpath.clean(uri_text.path)
+				path := slashpath.clean(identifier.path)
 				defer delete(path)
 
 				for component in strings.split(path, "/") do append(&endpoint.path, strings.clone(component))
