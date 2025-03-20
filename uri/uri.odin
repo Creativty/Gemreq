@@ -6,142 +6,183 @@ import "core:strings"
 // RFC3986		Uniform Resource Identifier (URI): Generic Syntax
 // Reference:	  https://datatracker.ietf.org/doc/html/rfc3986
 
-Authority :: struct {
-	host: string,
-	port: string,
-	user_info: string,
-}
+TLDs :: #load("tlds.txt", string)
 
 URI :: struct {
+	scheme: string,
+
+	userinfo: string,
+	host: string,
+	port: string,
 	path: string,
+	opaque: string,
+
 	query: string,
 	fragment: string,
-	scheme: string,
-	authority: Maybe(Authority),
 }
 
-parse_scheme :: proc(reader: ^Reader) -> (scheme: string, ok: bool) {
-	is_scheme :: proc(i: int, c: rune) -> bool {
-		if i == 0 do return is_alpha(c)
-		else do return is_scheme_suffix(c)
-	}
-	reader_next_while(reader, is_scheme)
-	if reader_next_if_rune(reader, ':') == rune(0) do reader_unwalk(reader)
-	scheme = strings.trim_right(reader_consume(reader), ":")
-	return strings.clone(scheme), true
-}
-
-parse_authority_user_info :: proc(reader: ^Reader) -> (user_info: string) {
-	// Reference: https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.1
-	if reader_contains(reader, '@') {
-		is_not_delimiter :: proc(_: int, c: rune) -> bool {
-			return c != '@'
+@(private)
+_check_userinfo :: proc(text: string) -> (valid: bool) {
+	for c in text {
+		switch c {
+		case '0'..='9':
+		case 'A'..='Z', 'a'..='z':
+		case '-', '.', '_', ':', '~', '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=', '%', '@':
+		case:
+			return false
 		}
-		reader_next_while(reader, is_not_delimiter)
-		reader_next_if_rune(reader, '@')
-		user_info = strings.trim_right(reader_consume(reader), "@")
 	}
-	return strings.clone(user_info)
+	return true
 }
 
-parse_authority_host :: proc(reader: ^Reader) -> (host: string, ok: bool) {
-	// Reference: https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.2
-	is_host_ipv6 :: proc(_: int, c: rune) -> bool {
-		return is_hex(c) || c == ':'
-	}
-	is_host_ipv4_regname :: proc(_: int, c: rune) -> bool {
-		return !is_reserved(c)
-	}
-	is_host := is_host_ipv4_regname
-	if reader_next_if_rune(reader, '[') != rune(0) do is_host = is_host_ipv6
-	reader_next_while(reader, is_host)
-	if is_host == is_host_ipv6 && reader_next_if_rune(reader, ']') == rune(0) do return host, false
-	host = reader_consume(reader)
-	return strings.clone(host), true
-}
-
-parse_authority :: proc(reader: ^Reader) -> (authority_optional: Maybe(Authority), ok: bool) {
-	// Reference: https://datatracker.ietf.org/doc/html/rfc3986#section-3.2
-	is_authority_prefix :: proc(i: int, c: rune) -> bool {
-		if i >= 2 do return false
-		return c == '/'
-	}
-	if slashes_len := reader_skip_while(reader, is_authority_prefix); slashes_len < 2 {
-		reader_unwalk(reader)
-		return nil, true
-	}
-
-	is_authority_rune :: proc(_: int, c: rune) -> bool {
-		return c != '#' && c != '/' && c != '?'
-	}
-	reader_next_while(reader, is_authority_rune)
-	authority_text := reader_consume(reader)
-	if authority_text == "" do return nil, true
-	authority_reader := reader_make(authority_text)
-
-	authority: Authority
-	authority.user_info = parse_authority_user_info(&authority_reader)
-	authority.host = parse_authority_host(&authority_reader) or_return
-	if reader_next_if_rune(&authority_reader, ':') != rune(0) {
-		// Reference: https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.3
-		is_port :: proc(_: int, c: rune) -> bool {
-			return is_digit(c)
+@(private)
+_check_colon_port :: proc(text: string) -> (valid: bool) {
+	if text == "" do return true
+	if text[0] != ':' do return false
+	for c in text[1:] {
+		switch c {
+		case '0'..='9':
+			continue
+		case:
+			return false
 		}
-		reader_next_while(&authority_reader, is_port)
-		authority.port = strings.clone(strings.trim_left(reader_consume(&authority_reader), ":"))
-	} else do authority.port = strings.clone("")
-	return authority, true
-}
-
-parse_path :: proc(reader: ^Reader, authority_omitted := true) -> (path: string) {
-	// Reference: https://datatracker.ietf.org/doc/html/rfc3986#section-3.3
-	is_path_rune :: proc(_: int, c: rune) -> bool {
-		return c != '#' && c != '?'
 	}
-	reader_next_while(reader, is_path_rune)
-	path_source := reader_consume(reader)
-
-	return strings.clone(path_source)
+	return true
 }
 
-parse_query :: proc(reader: ^Reader) -> (query: string) {
-	if reader_next_if_rune(reader, '?') == rune(0) do return strings.clone("")
-	is_query_rune :: proc(_: int, c: rune) -> bool {
-		return c != '#'
+@(private)
+_parse_scheme :: proc(uri: ^URI, text: string) -> (rest: string, ok: bool) {
+	for c, i in text {
+		switch c {
+		case 'a'..='z', 'A'..='Z':
+			continue
+		case '0'..='9', '+', '-', '.':
+			if i == 0 do return text, true
+		case ':':
+			if i == 0 do return "", false
+			scheme := strings.clone(text[:i])
+			defer delete(scheme)
+
+			uri.scheme = strings.to_lower(scheme)
+			return text[i+1:], true
+		case:
+			return text, true
+		}
 	}
-	reader_next_while(reader, is_query_rune)
-	return strings.clone(reader_consume(reader))
+	return text, true
 }
 
-parse_fragment :: proc(reader: ^Reader) -> (fragment: string) {
-	if reader_next_if_rune(reader, '#') == rune(0) do return strings.clone("")
-	is_fragment_rune :: proc(_: int, c: rune) -> bool {
-		return !is_reserved(c)
+@(private)
+_parse_host :: proc(uri: ^URI, text: string) -> (ok: bool) {
+	text := text
+
+	if strings.has_prefix(text, "[") { // IPv6
+		index_bracket := strings.last_index(text, "]")
+		if index_bracket < 0 do return false
+
+		colon_port := text[index_bracket+1:]
+		_check_colon_port(colon_port) or_return
+
+		index_zone := strings.index(text[:index_bracket], "%25")
+		if index_zone >= 0 {
+			ipv6 := decode(text[:index_zone], .Host) or_return
+			defer delete(ipv6)
+
+			zone := decode(text[index_zone:index_bracket+1], .Zone) or_return
+			defer delete(zone)
+
+			uri.host = strings.concatenate({ ipv6, zone })
+			uri.port = strings.clone(colon_port[1 if len(colon_port) > 0 else 0:])
+			return true
+		} else {
+			uri.host = decode(text[:index_bracket+1], .Host) or_return
+			uri.port = strings.clone(colon_port[1 if len(colon_port) > 0 else 0:])
+			return true
+		}
 	}
-	reader_next_while(reader, is_fragment_rune)
-	return strings.clone(reader_consume(reader))
+	if index_port := strings.last_index(text, ":"); index_port >= 0 {
+		colon_port := text[index_port:]
+		_check_colon_port(colon_port) or_return
+		uri.port = strings.clone(colon_port[1:])
+		uri.host, ok = decode(text[:index_port], .Host)
+	} else do uri.host, ok = decode(text, .Host)
+	return ok
 }
 
-parse :: proc(source: string) -> (uri: URI, ok: bool) {
-	reader := reader_make(source)
+@(private)
+_parse_authority :: proc(uri: ^URI, text: string) -> (ok: bool) {
+	i := strings.last_index(text, "@")
+	_parse_host(uri, text if i < 0 else text[i+1:]) or_return
+	if i < 0 do return true
 
-	if len(source) == 0 do return uri, false
-	uri.scheme, _ = parse_scheme(&reader)
-	if len(uri.scheme) > 0 do uri.authority = parse_authority(&reader) or_return
-	uri.path = parse_path(&reader, uri.authority == nil)
-	uri.query = parse_query(&reader)
-	uri.fragment = parse_fragment(&reader)
+	userinfo := text[:i]
+	if !_check_userinfo(userinfo) do return false
+	uri.userinfo, ok = decode(userinfo, .Userinfo)
+	return ok
+}
+
+@(private)
+_parse :: proc(text: string, via_request := false) -> (uri: URI, ok: bool) {
+	// TODO(XENOBAS): Handle control bytes
+
+	if text == "" && via_request do return uri, false
+	if text == "*" {
+		uri.path = strings.clone(text)
+		return uri, true
+	}
+
+	rest := _parse_scheme(&uri, text) or_return
+
+	if strings.has_suffix(rest, "?") && strings.count(rest, "?") == 1 do rest = rest[:len(rest) - 1]
+	else {
+		rest, _, uri.query = strings.partition(rest, "?")
+		uri.query = strings.clone(uri.query)
+	}
+
+	if !strings.has_prefix(rest, "/") {
+		if uri.scheme != "" {
+			uri.opaque = strings.clone(rest)
+			return uri, true
+		}
+		if via_request do return uri, false
+		if segment, _, _ := strings.partition(rest, "/"); strings.contains_rune(segment, ':') do return uri, false
+	}
+
+	if (uri.scheme != "" || (!via_request && !strings.has_prefix(rest, "///"))) && strings.has_prefix(rest, "//") {
+		authority: string
+		authority, rest = rest[2:], ""
+		if i := strings.index(authority, "/"); i >= 0 do authority, rest = authority[:i], authority[i:]
+		_parse_authority(&uri, authority) or_return
+	} else if uri.scheme != "" && strings.has_prefix(rest, "/") {
+		// OmitHost ?!?
+	}
+
+	uri.path = decode(rest, .Path) or_return
 	return uri, true
 }
 
+parse :: proc(text: string) -> (uri: URI, ok: bool) {
+	text, _, frag := strings.partition(text, "#")
+
+	uri, ok = _parse(text)
+	if !ok do return uri, false
+	if frag == "" do return uri, true
+
+	uri.fragment = decode(frag, .Fragment) or_return
+	return uri, true
+}
+
+parse_reference :: proc(reference: URI, text: string) -> (uri: URI, ok: bool) {
+	return uri, false
+}
+
 destroy :: proc(uri: URI) {
-	delete(uri.scheme)
-	if authority, ok := uri.authority.(Authority); ok {
-		delete(authority.host)
-		delete(authority.port)
-		delete(authority.user_info)
-	}
-	delete(uri.path)
-	delete(uri.query)
 	delete(uri.fragment)
+	delete(uri.host)
+	delete(uri.opaque)
+	delete(uri.path)
+	delete(uri.port)
+	delete(uri.query)
+	delete(uri.scheme)
+	delete(uri.userinfo)
 }

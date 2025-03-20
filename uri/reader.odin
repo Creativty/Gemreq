@@ -63,6 +63,14 @@ reader_next_while :: proc(r: ^Reader, cond: proc (i: int, c: rune) -> bool) -> (
 	return n
 }
 
+reader_next_while_rune_delimiter :: proc(r: ^Reader, delimiter: rune) -> (n: int) {
+	for !reader_eof(r) && reader_peek(r) != delimiter {
+		reader_next(r)
+		n += 1
+	}
+	return n
+}
+
 reader_unwalk :: proc(r: ^Reader) {
 	r.index_curr = r.index_last
 }
