@@ -1,15 +1,16 @@
 package gemreq
 
+import "uri"
+
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:sync"
 import "core:strconv"
 import "core:strings"
 import "core:text/edit"
 import "core:path/slashpath"
 import "vendor:raylib"
-
-import "uri"
 
 Text_Edit_State :: edit.State
 
@@ -19,8 +20,10 @@ Omnibar :: struct {
 
 	error: Maybe(cstring),
 	visible: bool,
+
 	disabled: bool,
 	disabled_timestamp: f64,
+	disabled_mutex: sync.Mutex,
 
 	caret: f32,
 	caret_time: f64,
@@ -29,25 +32,17 @@ Omnibar :: struct {
 launch_omnibar :: proc(omnibar: ^Omnibar) {
 	edit.init(&omnibar.state, context.allocator, context.allocator)
 	strings.builder_init(&omnibar.builder)
-
 	edit.begin(&omnibar.state, 1, &omnibar.builder)
-
 	omnibar.visible = true
 	omnibar.disabled = false
-
 	edit.input_text(&omnibar.state, "gemini://geminiprotocol.net")
-
 	omnibar.caret = cast(f32)omnibar.state.selection.x
 	log.debug("omnibar initialised")
 }
 
 unload_omnibar :: proc(omnibar: ^Omnibar) {
-	omnibar.visible = false
-	omnibar.disabled = false
-
 	edit.end(&omnibar.state)
 	edit.destroy(&omnibar.state)
-
 	strings.builder_destroy(&omnibar.builder)
 	log.debug("omnibar unloaded")
 }
@@ -67,6 +62,7 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 		}
 
 		key_goto := raylib.IsKeyPressed(.ENTER)
+		key_omnibar := key_control && raylib.IsKeyPressed(.L)
 		if key_goto {
 			text := strings.to_string(omnibar.builder)
 			text  = strings.trim_right_space(text)
@@ -94,13 +90,10 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 				omnibar.caret_time = raylib.GetTime()
 			}
 		}
-
-		key_omnibar := key_control && raylib.IsKeyPressed(.L)
 		if key_omnibar {
 			omnibar.visible = !omnibar.visible || browser.document == nil
 			omnibar.caret_time = raylib.GetTime()
 		}
-
 		omnibar.caret = cast(f32)math.lerp(cast(f64)omnibar.caret, cast(f64)omnibar.state.selection.x, LERP_FACTOR)
 	}
 }
@@ -155,5 +148,32 @@ draw_omnibar :: proc(browser: ^Browser) {
 
 		text_measure := MeasureTextEx(font, text, font_size_f32, spacing)
 		DrawRectangle(cast(i32)(text_area.x + text_measure.x * (omnibar.caret / cast(f32)omnibar.state.selection.x)), cast(i32)text_area.y, 2, cast(i32)text_measure.y, color)
+	}
+}
+
+disable_omnibar :: proc(omnibar: ^Omnibar) {
+	if sync.mutex_guard(&omnibar.disabled_mutex) {
+		omnibar.disabled = true
+		omnibar.disabled_timestamp = raylib.GetTime()
+	}
+}
+
+activate_omnibar :: proc(omnibar: ^Omnibar) {
+	if sync.mutex_guard(&omnibar.disabled_mutex) do omnibar.disabled = false
+}
+
+sync_omnibar :: proc(omnibar: ^Omnibar, endpoint: Endpoint) {
+	edit.clear_all(&omnibar.state)
+	edit.input_text(&omnibar.state, "gemini://")
+	edit.input_text(&omnibar.state, endpoint.host)
+	if endpoint.port != GEMINI_PORT {
+		port := fmt.aprintf(":%v", endpoint.port)
+		defer delete(port)
+
+		edit.input_text(&omnibar.state, port)
+	}
+	for component in endpoint.path {
+		edit.input_rune(&omnibar.state, '/')
+		edit.input_text(&omnibar.state, component)
 	}
 }

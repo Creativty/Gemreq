@@ -1,5 +1,6 @@
 package gemreq
 
+import "uri"
 import ssl "openssl"
 
 import "core:c"
@@ -9,128 +10,33 @@ import "core:mem"
 import "core:net"
 import "core:time"
 import "core:sync"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:sys/posix"
+import "core:path/slashpath"
 
-GEMINI :: "gemini"
-PROTOCOL :: GEMINI + "://"
+GEMINI_PORT	:: 1965
 
 Endpoint :: struct {
 	host: string,
-	path: [dynamic]string,
+	path: [dynamic]string, // TODO(XENOBAS): use string instead of [dynamic]string
 	port: int,
 }
 
-clone_endpoint :: proc(src: Endpoint) -> (clone: Endpoint) {
-	clone.port = src.port
-	clone.host = strings.clone(src.host)
-	clone.path = make([dynamic]string)
-	for entry in src.path {
-		entry_clone := strings.clone(entry)
-		append(&clone.path, entry_clone)
-	}
-	return
+Element :: struct {
+	size: [2]f32,
+	offset: f32,
+	gemtext: Gemtext,
+	is_preformatted: bool,
 }
 
-parse_endpoint :: proc(src: string) -> (ep: Endpoint){
-	ep.port = 1965
-	ep.path = make([dynamic]string)
-
-	url := strings.trim_space(src)
-	if strings.has_prefix(url, PROTOCOL) do url = url[len(PROTOCOL):]
-
-	host : Maybe(string) = nil
-	for i in 0..<len(url) {
-		if url[i] == ':' || url[i] == '/' {
-			host = strings.clone(url[:i])
-			break
-		}
-	}
-	if host == nil do host = strings.clone(url)
-	ep.host = host.(string)
-
-	url = url[len(ep.host):]
-	if strings.has_prefix(url, ":") {
-		port_length: int
-
-		url = url[1:]
-		ep.port, _ = strconv.parse_int(url, n = &port_length)
-
-		url = url[port_length:]
-	}
-
-	if strings.has_prefix(url, "/") {
-		views := strings.split(url, "/")
-		defer delete(views)
-
-		for view in views {
-			if len(view) == 0 do continue
-			view := strings.trim_left(view, "+")
-			part := strings.clone(view)
-			append(&ep.path, part)
-		}
-	}
-
-	return ep
-}
-
-// TODO(XENOBAS): Implement URI encoding.
-// TODO(XENOBAS): Add support for ../. relative path
-resolve_endpoint :: proc(browser: ^Browser, url: string) -> (ep: Endpoint, is_external: bool) {
-	url := url
-	sync.mutex_guard(&browser.endpoint_mutex)
-	ep_parent, ep_parent_exists := browser.endpoint.(Endpoint)
-	if !ep_parent_exists || strings.contains(url, "://") {
-		// Absolute URL
-		if strings.has_prefix(url, "gemini://") do return parse_endpoint(url), false
-		return ep, true
-	} else if strings.has_prefix(url, "/") || strings.has_prefix(url, "~") {
-		assert(ep_parent_exists, "invalid url expected a parent endpoint existing")
-
-		// Absolute path
-		url = strings.trim_left(url, "/~")
-
-		ep = clone_endpoint(ep_parent)
-		for entry in ep.path do delete(entry)
-		clear(&ep.path)
-
-		path := strings.split(url, "/")
-		defer delete(path)
-
-		for entry in path {
-			if len(entry) == 0 do continue
-			entry_clone := strings.clone(entry)
-			append(&ep.path, entry_clone)
-		}
-		return ep, false
-	} else {
-		assert(ep_parent_exists, "invalid url expected a parent endpoint existing")
-
-		// Relative path
-		url = strings.trim_left(url, "+")
-		ep = clone_endpoint(ep_parent)
-
-		if len(ep.path) > 0 && strings.contains(ep.path[len(ep.path) - 1], ".") {
-			pop(&ep.path)
-		}
-
-		path := strings.split(url, "/")
-		defer delete(path)
-
-		for entry in path {
-			if len(entry) == 0 do continue
-			entry_clone := strings.clone(entry)
-			append(&ep.path, entry_clone)
-		}
-		return ep, false
-	}
-}
-
-delete_endpoint :: proc(ep: Endpoint) {
-	for level in ep.path do delete(level)
-	delete(ep.path)
-	delete(ep.host)
+Document :: struct {
+	status: int,
+	source: string,
+	height: f32,
+	elements: [dynamic]Element,
+	gemtexts: [dynamic]Gemtext,
 }
 
 Gemini_Error :: union #shared_nil {
@@ -138,6 +44,7 @@ Gemini_Error :: union #shared_nil {
 	cstring,
 }
 
+@(private="file")
 _request_ssl_init :: proc(sock: net.Socket) -> (ctx: ssl.SSL_CTX, inst: ssl.SSL, err: cstring) {
 	// SSL context
 	ctx = ssl.SSL_CTX_new(ssl.TLS_client_method())
@@ -159,13 +66,15 @@ _request_ssl_init :: proc(sock: net.Socket) -> (ctx: ssl.SSL_CTX, inst: ssl.SSL,
 	return ctx, inst, nil
 }
 
+@(private="file")
 _request_ssl_destroy :: proc(ctx: ssl.SSL_CTX, inst: ssl.SSL) {
 	ssl.SSL_free(inst)
 	ssl.SSL_CTX_free(ctx)
 }
 
+@(private="file")
 _request_write :: proc(ep: Endpoint, request: ^strings.Builder) {
-	strings.write_string(request, PROTOCOL)
+	strings.write_string(request, "gemini://")
 	strings.write_string(request, ep.host)
 	strings.write_string(request, "/")
 	if len(ep.path) > 0 {
@@ -177,6 +86,73 @@ _request_write :: proc(ep: Endpoint, request: ^strings.Builder) {
 	strings.write_string(request, "\r\n")
 
 	strings.write_string(request, "\r\n")
+}
+
+resolve_endpoint :: proc(browser: ^Browser, location: uri.URI) -> (endpoint: Endpoint, ok: bool) {
+	assert(location.opaque == "")
+	assert(location.scheme == "" || location.scheme == "gemini")
+	sync.mutex_lock(&browser.endpoint_mutex)
+	defer sync.mutex_unlock(&browser.endpoint_mutex)
+
+	endpoint.path = make([dynamic]string)
+	if ep_ctx, ctx_exists := browser.endpoint.(Endpoint); ctx_exists && location.host == "" {
+		endpoint.port = ep_ctx.port
+		endpoint.host = strings.clone(ep_ctx.host)
+
+		if !strings.has_prefix(location.path, "/") {
+			path_capacity	:= len(ep_ctx.path)
+			if len(ep_ctx.path) > 0 && strings.has_suffix(slice.last(ep_ctx.path[:]), ".gmi") do path_capacity -= 1
+			path_ctx		:= strings.join(ep_ctx.path[:path_capacity], "/")
+			path_rel		:= strings.join({ path_ctx, location.path }, "/")
+			path			:= slashpath.clean(path_rel)
+			components		:= strings.split(path, "/")
+			defer {
+				delete(components)
+				delete(path_ctx)
+				delete(path_rel)
+				delete(path)
+			}
+
+			for component in components {
+				if len(component) == 0 do continue
+				append(&endpoint.path, strings.clone(component))
+			}
+		} else {
+			path		:= slashpath.clean(location.path)
+			components	:= strings.split(path, "/")
+			defer {
+				delete(components)
+				delete(path)
+			}
+
+			for component in components {
+				if len(component) == 0 do continue
+				append(&endpoint.path, strings.clone(component))
+			}
+		}
+	} else {
+		log.assertf(location.host != "", "location %#v", location)
+		endpoint.port = GEMINI_PORT
+		endpoint.host = strings.clone(location.host)
+		if len(location.port) > 0 do endpoint.port = strconv.parse_int(location.port) or_return
+		path := slashpath.clean(location.path)
+		components := strings.split(path, "/")
+		defer {
+			delete(path)
+			delete(components)
+		}
+		for component in components {
+			if len(component) == 0 do continue
+			append(&endpoint.path, strings.clone(component))
+		}
+	}
+	return endpoint, true
+}
+
+delete_endpoint :: proc(ep: Endpoint) {
+	for level in ep.path do delete(level)
+	delete(ep.path)
+	delete(ep.host)
 }
 
 request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) {
@@ -238,21 +214,6 @@ request_document :: proc(ep: Endpoint) -> (response: string, err: Gemini_Error) 
 	response  = strings.clone(resp_tmp)
 
 	return response, nil
-}
-
-Element :: struct {
-	size: [2]f32,
-	offset: f32,
-	gemtext: Gemtext,
-	is_preformatted: bool,
-}
-
-Document :: struct {
-	status: int,
-	source: string,
-	height: f32,
-	elements: [dynamic]Element,
-	gemtexts: [dynamic]Gemtext,
 }
 
 parse_document :: proc(browser: ^Browser, source: string, source_do_clone := false) -> (document: Document) {

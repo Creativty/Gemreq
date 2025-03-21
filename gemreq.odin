@@ -20,10 +20,6 @@ color_text := raylib.GetColor(0xE8EAEDFF)
 color_link := raylib.GetColor(0x4C97FFFF)
 color_background := raylib.GetColor(0x101218FF)
 
-Thread :: thread.Thread
-Channel_Request :: chan.Chan(Endpoint)
-Channel_Document :: chan.Chan(Result_Document)
-
 Browser :: struct {
 	fonts: map[string]Font_Asset,
 	debug: bool,
@@ -43,11 +39,6 @@ Browser :: struct {
 		request: Channel_Request,
 		document: Channel_Document,
 	},
-}
-
-Result_Document :: union {
-	Gemini_Error,
-	Document,
 }
 
 launch :: proc(browser: ^Browser) {
@@ -95,67 +86,6 @@ update :: proc(browser: ^Browser, dt: f64) {
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 }
 
-resolve :: proc(browser: ^Browser, location: uri.URI) -> (endpoint: Endpoint, ok: bool) {
-	assert(location.opaque == "")
-	assert(location.scheme == "" || location.scheme == "gemini")
-	sync.mutex_lock(&browser.endpoint_mutex)
-	defer sync.mutex_unlock(&browser.endpoint_mutex)
-
-	endpoint.path = make([dynamic]string)
-	if ep_ctx, ctx_exists := browser.endpoint.(Endpoint); ctx_exists && location.host == "" {
-		endpoint.port = ep_ctx.port
-		endpoint.host = strings.clone(ep_ctx.host)
-
-		if !strings.has_prefix(location.path, "/") {
-			path_capacity	:= len(ep_ctx.path)
-			if len(ep_ctx.path) > 0 && strings.has_suffix(slice.last(ep_ctx.path[:]), ".gmi") do path_capacity -= 1
-			path_ctx		:= strings.join(ep_ctx.path[:path_capacity], "/")
-			path_rel		:= strings.join({ path_ctx, location.path }, "/")
-			path			:= slashpath.clean(path_rel)
-			components		:= strings.split(path, "/")
-			defer {
-				delete(components)
-				delete(path_ctx)
-				delete(path_rel)
-				delete(path)
-			}
-
-			for component in components {
-				if len(component) == 0 do continue
-				append(&endpoint.path, strings.clone(component))
-			}
-		} else {
-			path		:= slashpath.clean(location.path)
-			components	:= strings.split(path, "/")
-			defer {
-				delete(components)
-				delete(path)
-			}
-
-			for component in components {
-				if len(component) == 0 do continue
-				append(&endpoint.path, strings.clone(component))
-			}
-		}
-	} else {
-		log.assertf(location.host != "", "location %#v", location)
-		endpoint.port = 1965
-		endpoint.host = strings.clone(location.host)
-		if len(location.port) > 0 do endpoint.port = strconv.parse_int(location.port) or_return
-		path := slashpath.clean(location.path)
-		components := strings.split(path, "/")
-		defer {
-			delete(path)
-			delete(components)
-		}
-		for component in components {
-			if len(component) == 0 do continue
-			append(&endpoint.path, strings.clone(component))
-		}
-	}
-	return endpoint, true
-}
-
 draw :: proc(browser: ^Browser) {
 	using raylib
 
@@ -195,58 +125,11 @@ main :: proc() {
 	launch(&browser)
 	defer unload(&browser)
 
-	if channel, err := chan.create_unbuffered(Channel_Request, context.allocator); err == nil do browser.channels.request = channel
-	else do log.panicf("failure: could not create channel for `request` because of %v", err)
-	log.debugf("channel `request` created")
-	defer chan.destroy(browser.channels.request)
+	routine_network_init(&browser)
+	defer routine_network_destroy(&browser)
 
-	if channel, err := chan.create_unbuffered(Channel_Document, context.allocator); err == nil do browser.channels.document = channel
-	else do log.panicf("failure: could not create channel for `document` because of %v", err)
-	log.debugf("channel `document` created")
-	defer chan.destroy(browser.channels.document)
-
-	main_network :: proc(data: rawptr) {
-		browser := cast(^Browser)data
-		channel_in := &browser.channels.request
-		for !chan.is_closed(channel_in) {
-			endpoint, endpoint_present := chan.try_recv(channel_in^)
-			if !endpoint_present do continue
-
-			browser.omnibar.disabled = true
-			browser.omnibar.disabled_timestamp = raylib.GetTime()
-			defer browser.omnibar.disabled = false
-
-			// Fetch document bytes
-			resp, resp_err := request_document(endpoint)
-			if resp_err != nil {
-				browser.omnibar.error = fmt.caprintf("%#v", resp_err)
-				continue
-			} else if str, exists := browser.omnibar.error.(cstring); exists {
-				delete(str)
-				browser.omnibar.error = nil
-			}
-
-			if sync.mutex_guard(&browser.endpoint_mutex) do browser.endpoint = endpoint
-
-			document := parse_document(browser, resp)
-			if document_old, document_exists := browser.document.(Document); document_exists {
-				browser.scroll.target = 0
-				browser.scroll.current = 0
-				delete_document(document_old)
-			}
-
-			browser.document = document
-			browser.omnibar.visible = false
-		}
-	}
-	 
-	browser.network_thread = thread.create_and_start_with_data(&browser, main_network, init_context = context)
-	defer {
-		chan.close(&browser.channels.request)
-		chan.close(&browser.channels.document)
-		thread.join(browser.network_thread)
-		thread.destroy(browser.network_thread)
-	}
+	browser.network_thread = thread.create_and_start_with_poly_data(&browser, routine_network, init_context = context)
+	defer routine_network_terminate(&browser)
 
 	for {
 		must_close := WindowShouldClose()

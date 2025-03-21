@@ -10,7 +10,7 @@ navigate_click :: proc(browser: ^Browser, url: string) {
 }
 
 navigate_uri :: proc(browser: ^Browser, location: uri.URI) {
-	endpoint, ok := resolve(browser, location)
+	endpoint, ok := resolve_endpoint(browser, location)
 	if ok {
 		navigate_endpoint(browser, endpoint)
 	} else do log.errorf("could not resolve %#v", location)
