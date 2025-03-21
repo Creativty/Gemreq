@@ -173,6 +173,7 @@ sync_omnibar :: proc(omnibar: ^Omnibar, endpoint: Endpoint) {
 		edit.input_text(&omnibar.state, port)
 	}
 	for component in endpoint.path {
+		if component == "." do continue
 		edit.input_rune(&omnibar.state, '/')
 		edit.input_text(&omnibar.state, component)
 	}

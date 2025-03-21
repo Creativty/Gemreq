@@ -37,8 +37,9 @@ gemtext_options :: proc(browser: ^Browser, kind: Gemtext_Kind) -> Text_Options {
 		return { FONT_SANS_BOLD, .Large, 1.2, color_text }
 	case .Link:
 		return { FONT_SANS_BOLD, .Regular, 1.0, color_link }
+	case:
+		return { FONT_SANS_REGULAR, .Regular, 1.0, color_text }
 	}
-	return { FONT_SANS_REGULAR, .Regular, 1.0, color_text }
 }
 
 gemtext_parse :: proc(src: string, preformatted := false) -> Gemtext {

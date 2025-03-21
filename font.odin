@@ -37,12 +37,12 @@ font_size_float :: proc(size: Font_Size) -> f32 {
 	return cast(f32)font_size_int(size)
 }
 
-font_load :: proc(browser: ^Browser, name: string, path: cstring) {
+font_load :: proc(browser: ^Browser, name: string, path: cstring, glyphs_count := i32(0x058f)) {
 	asset: Font_Asset
 
 	for _, size in asset {
 		using raylib
-		asset[size] = LoadFontEx(path, font_size_int(size), nil, 4497)
+		asset[size] = LoadFontEx(path, font_size_int(size), nil, glyphs_count)
 		SetTextureFilter(asset[size].texture, .BILINEAR)
 	}
 	browser.fonts[name] = asset

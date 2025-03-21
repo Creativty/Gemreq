@@ -104,8 +104,9 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 			if hover_collision || (hover_matches && hover_url == url) {
 				browser.hover = url
 				raylib.DrawRectangleRec({ ui.padding.x, ui.padding.y + offset + element.size.y, element.size.x, 1.0 }, config.color)
-				// Instigate navigation
-				if raylib.IsMouseButtonPressed(.LEFT) && hover_collision do navigate_click(browser, url)
+				if hover_collision && raylib.IsMouseButtonPressed(.LEFT) {
+					navigate_enqueue(browser, url)
+				}
 			}
 		}
 	}

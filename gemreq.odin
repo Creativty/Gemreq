@@ -46,8 +46,8 @@ launch :: proc(browser: ^Browser) {
 	browser.cursor_shape = .DEFAULT
 
 	browser.fonts = make(map[string]Font_Asset)
-	font_load(browser, FONT_SANS_REGULAR, "font/NotoSans-Regular.ttf")
-	font_load(browser, FONT_SANS_BOLD, "font/NotoSans-Bold.ttf")
+	font_load(browser, FONT_SANS_REGULAR, "assets/font/NotoSans-Regular.ttf")
+	font_load(browser, FONT_SANS_BOLD, "assets/font/NotoSans-Bold.ttf")
 
 	launch_omnibar(&browser.omnibar)
 }
@@ -86,6 +86,7 @@ update :: proc(browser: ^Browser, dt: f64) {
 	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
 }
 
+// NOTE(XENOBAS): Non ascii glyphs slow down rendering ?
 draw :: proc(browser: ^Browser) {
 	using raylib
 
