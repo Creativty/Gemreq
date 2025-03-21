@@ -1,11 +1,16 @@
 package gemreq
 
+import "uri"
+import "core:c"
 import "core:fmt"
 import "core:log"
 import "core:sync"
+import "core:slice"
 import "core:thread"
+import "core:strconv"
 import "core:strings"
 import "core:sync/chan"
+import "core:path/slashpath"
 import "vendor:raylib"
 
 LERP_FACTOR		:= 0.2
@@ -62,7 +67,6 @@ unload :: proc(browser: ^Browser) {
 		log.infof("font %s unloaded", name)
 	}
 	delete(browser.fonts)
-
 	unload_omnibar(&browser.omnibar)
 }
 
@@ -75,24 +79,81 @@ update :: proc(browser: ^Browser, dt: f64) {
 		raylib.SetMouseCursor(cursor_shape)
 		browser.cursor_shape = cursor_shape
 	}
-	browser.hover = nil
-	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
+
+	if text, queued := browser.navigate_queue.(string); queued {
+		navigate(browser, text)
+		browser.navigate_queue = nil
+	}
+
+	update_omnibar(browser, dt)
+	update_document(browser, dt, must_reload_layout)
 
 	key_debug := raylib.IsKeyPressed(.F3)
 	if key_debug do browser.debug = !browser.debug
-	if url, queue_filled := browser.navigate_queue.(string); queue_filled {
-		endpoint, endpoint_external := resolve_endpoint(browser, url)
-		if endpoint_external {
-			log.debugf("external url %s", url)
-			url_cstring := strings.clone_to_cstring(url, context.temp_allocator)
-			raylib.OpenURL(url_cstring)
+
+	browser.hover = nil
+	browser.omnibar.visible = (browser.omnibar.visible || browser.document == nil)
+}
+
+resolve :: proc(browser: ^Browser, location: uri.URI) -> (endpoint: Endpoint, ok: bool) {
+	assert(location.opaque == "")
+	assert(location.scheme == "" || location.scheme == "gemini")
+	sync.mutex_lock(&browser.endpoint_mutex)
+	defer sync.mutex_unlock(&browser.endpoint_mutex)
+
+	endpoint.path = make([dynamic]string)
+	if ep_ctx, ctx_exists := browser.endpoint.(Endpoint); ctx_exists && location.host == "" {
+		endpoint.port = ep_ctx.port
+		endpoint.host = strings.clone(ep_ctx.host)
+
+		if !strings.has_prefix(location.path, "/") {
+			path_capacity	:= len(ep_ctx.path)
+			if len(ep_ctx.path) > 0 && strings.has_suffix(slice.last(ep_ctx.path[:]), ".gmi") do path_capacity -= 1
+			path_ctx		:= strings.join(ep_ctx.path[:path_capacity], "/")
+			path_rel		:= strings.join({ path_ctx, location.path }, "/")
+			path			:= slashpath.clean(path_rel)
+			components		:= strings.split(path, "/")
+			defer {
+				delete(components)
+				delete(path_ctx)
+				delete(path_rel)
+				delete(path)
+			}
+
+			for component in components {
+				if len(component) == 0 do continue
+				append(&endpoint.path, strings.clone(component))
+			}
 		} else {
-			navigate(browser, endpoint)
+			path		:= slashpath.clean(location.path)
+			components	:= strings.split(path, "/")
+			defer {
+				delete(components)
+				delete(path)
+			}
+
+			for component in components {
+				if len(component) == 0 do continue
+				append(&endpoint.path, strings.clone(component))
+			}
 		}
-		browser.navigate_queue = nil
+	} else {
+		log.assertf(location.host != "", "location %#v", location)
+		endpoint.port = 1965
+		endpoint.host = strings.clone(location.host)
+		if len(location.port) > 0 do endpoint.port = strconv.parse_int(location.port) or_return
+		path := slashpath.clean(location.path)
+		components := strings.split(path, "/")
+		defer {
+			delete(path)
+			delete(components)
+		}
+		for component in components {
+			if len(component) == 0 do continue
+			append(&endpoint.path, strings.clone(component))
+		}
 	}
-	update_omnibar(browser, dt)
-	update_document(browser, dt, must_reload_layout)
+	return endpoint, true
 }
 
 draw :: proc(browser: ^Browser) {
@@ -124,8 +185,8 @@ main :: proc() {
 	InitWindow(i32(WINDOW_WIDTH), i32(WINDOW_HEIGHT), "Gemreq - Gemini browser")
 	log.infof("window created %02.2fx%02.2f", WINDOW_WIDTH, WINDOW_HEIGHT)
 	defer {
-		CloseWindow()
 		log.info("browser loop completed")
+		CloseWindow()
 	}
 
 	SetExitKey(.KEY_NULL)
@@ -199,4 +260,5 @@ main :: proc() {
 		EndDrawing()
 		free_all(context.temp_allocator)
 	}
+	free_all(context.temp_allocator)
 }

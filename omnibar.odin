@@ -72,25 +72,7 @@ update_omnibar :: proc(browser: ^Browser, dt: f64) {
 			text  = strings.trim_right_space(text)
 			if strings.has_prefix(text, " ") {
 				log.error("todo: omnibar has no search engine implementation")
-			} else if identifier, ok := uri.parse(text); ok {
-				defer uri.destroy(identifier)
-
-				if identifier.scheme != "" && identifier.scheme != "gemini" do log.panicf("scheme invalid :: %#v", identifier.scheme)
-				if identifier.opaque != "" do log.panicf("opaque uri :: %#v", identifier)
-
-				port, _ := strconv.parse_int(identifier.port)
-				endpoint := Endpoint{
-					host = strings.clone(identifier.host),
-					path = make([dynamic]string),
-					port = 1965 if identifier.port == "" else port,
-				}
-
-				path := slashpath.clean(identifier.path)
-				defer delete(path)
-
-				for component in strings.split(path, "/") do append(&endpoint.path, strings.clone(component))
-				navigate(browser, endpoint)
-			}
+			} else do navigate(browser, strings.trim_space(text))
 		} else {
 			key_left := raylib.IsKeyPressed(.LEFT) || raylib.IsKeyPressedRepeat(.LEFT)
 			key_right := raylib.IsKeyPressed(.RIGHT) || raylib.IsKeyPressedRepeat(.RIGHT)
