@@ -10,27 +10,25 @@ navigate_enqueue :: proc(browser: ^Browser, url: string) {
 }
 
 navigate_uri :: proc(browser: ^Browser, location: uri.URI) {
-	endpoint, ok := resolve_endpoint(browser, location)
+	channel := browser.channels.request
+	destination, ok := resolve_uri(browser, location)
 	if ok {
-		navigate_endpoint(browser, endpoint)
-	} else do log.errorf("could not resolve %#v", location)
+		if !chan.send(channel, destination) {
+			log.errorf("could not send location `%v`", destination)
+		}
+	} else do log.errorf("could not resolve `%v`", location)
 }
 
 navigate_string :: proc(browser: ^Browser, text: string) {
 	location, ok := uri.parse(text)
 	defer uri.destroy(location)
+
 	if ok {
 		navigate_uri(browser, location)
-	} else do log.errorf("could not parse %#v", text)
-}
-
-navigate_endpoint :: proc(browser: ^Browser, ep: Endpoint, edit_history := false) {
-	sent := chan.send(browser.channels.request, ep)
-	if !sent do log.errorf("failure: could not send endpoint to networking thread")
+	} else do log.errorf("could not parse `%v`", text)
 }
 
 navigate :: proc {
 	navigate_uri,
 	navigate_string,
-	navigate_endpoint,
 }

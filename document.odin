@@ -101,7 +101,7 @@ draw_document :: proc(browser: ^Browser, document: Document) {
 			mouse := raylib.GetMousePosition()
 			hover_url, hover_matches := browser.hover.(string)
 			hover_collision := raylib.CheckCollisionPointRec(mouse, box)
-			if hover_collision || (hover_matches && hover_url == url) {
+			if !browser.history.visible && !browser.omnibar.visible && (hover_collision || (hover_matches && hover_url == url)) {
 				browser.hover = url
 				raylib.DrawRectangleRec({ ui.padding.x, ui.padding.y + offset + element.size.y, element.size.x, 1.0 }, config.color)
 				if hover_collision && raylib.IsMouseButtonPressed(.LEFT) {

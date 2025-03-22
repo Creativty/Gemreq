@@ -105,7 +105,7 @@ draw_omnibar :: proc(browser: ^Browser) {
 	omnibar := &browser.omnibar
 
 	// Background
-	DrawRectangleRec({ 0, 0, ui.window.x, ui.window.y }, ColorAlpha(color_background, 0.333))
+	DrawRectangleRec({ 0, 0, ui.window.x, ui.window.y }, ColorAlpha(color_background, 0.666))
 
 	font_size := Font_Size.Regular
 	font_size_f32 := font_size_float(font_size)
@@ -162,19 +162,28 @@ activate_omnibar :: proc(omnibar: ^Omnibar) {
 	if sync.mutex_guard(&omnibar.disabled_mutex) do omnibar.disabled = false
 }
 
-sync_omnibar :: proc(omnibar: ^Omnibar, endpoint: Endpoint) {
+sync_omnibar :: proc(omnibar: ^Omnibar, location: uri.URI) {
 	edit.clear_all(&omnibar.state)
-	edit.input_text(&omnibar.state, "gemini://")
-	edit.input_text(&omnibar.state, endpoint.host)
-	if endpoint.port != GEMINI_PORT {
-		port := fmt.aprintf(":%v", endpoint.port)
-		defer delete(port)
 
-		edit.input_text(&omnibar.state, port)
+	edit.input_text(&omnibar.state, "gemini://")
+	if len(location.userinfo) > 0 {
+		edit.input_text(&omnibar.state, location.userinfo)
+		edit.input_rune(&omnibar.state, '@')
 	}
-	for component in endpoint.path {
-		if component == "." do continue
-		edit.input_rune(&omnibar.state, '/')
-		edit.input_text(&omnibar.state, component)
+	edit.input_text(&omnibar.state, location.host)
+	port := GEMINI_PORT
+	if len(location.port) > 0 do port, _ = strconv.parse_int(location.port)
+	if port != GEMINI_PORT {
+		edit.input_rune(&omnibar.state, ':')
+		edit.input_text(&omnibar.state, location.port)
+	}
+	edit.input_text(&omnibar.state, location.path)
+	if len(location.query) > 0 {
+		edit.input_rune(&omnibar.state, '?')
+		edit.input_text(&omnibar.state, location.query)
+	}
+	if len(location.fragment) > 0 {
+		edit.input_rune(&omnibar.state, '#')
+		edit.input_text(&omnibar.state, location.fragment)
 	}
 }

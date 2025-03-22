@@ -1,12 +1,13 @@
 package gemreq
 
+import "uri"
 import "core:log"
 import "core:sync"
 import "core:thread"
 import "core:sync/chan"
 
 Thread :: thread.Thread
-Channel_Request :: chan.Chan(Endpoint)
+Channel_Request :: chan.Chan(uri.URI)
 Channel_Document :: chan.Chan(Document_Or_Error)
 Document_Or_Error :: union {
 	Gemini_Error,
@@ -39,22 +40,21 @@ routine_network_terminate :: proc(browser: ^Browser) {
 routine_network :: proc(browser: ^Browser) {
 	chan_in := &browser.channels.request
 	for !chan.is_closed(chan_in) {
-		endpoint, endpoint_queued := chan.try_recv(chan_in^)
-		if !endpoint_queued do continue
+		in_location, received := chan.try_recv(chan_in^)
+		if !received do continue
+
+		location := uri.clone(in_location)
+		uri.destroy(in_location)
 
 		disable_omnibar(&browser.omnibar)
 		defer activate_omnibar(&browser.omnibar)
 
-		bytes, err := request_document(endpoint)
+		bytes, err := request_document_uri(location)
 		if err != nil {
-			log.errorf("navigation to `%#v` failed because of %#v", endpoint, err)
+			log.errorf("navigation to `%#v` failed because of %#v", location, err)
 			continue
 		}
-		if sync.mutex_guard(&browser.endpoint_mutex) {
-			if endpoint_old, exists := browser.endpoint.(Endpoint); exists do delete_endpoint(endpoint_old)
-			sync_omnibar(&browser.omnibar, endpoint)
-			browser.endpoint = endpoint
-		}
+		if _, ok := push_history(&browser.history, location); ok do sync_omnibar(&browser.omnibar, location)
 
 		document := parse_document(browser, bytes)
 		if doc_old, exists := browser.document.(Document); exists {

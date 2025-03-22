@@ -25,6 +25,7 @@ Browser :: struct {
 	debug: bool,
 	hover: Maybe(string),
 	omnibar: Omnibar,
+	history: History,
 	document: Maybe(Document),
 	endpoint: Maybe(Endpoint),
 	endpoint_mutex: sync.Mutex,
@@ -42,6 +43,7 @@ Browser :: struct {
 }
 
 launch :: proc(browser: ^Browser) {
+	browser.history = make_history()
 	browser.document = nil
 	browser.cursor_shape = .DEFAULT
 
@@ -59,6 +61,7 @@ unload :: proc(browser: ^Browser) {
 	}
 	delete(browser.fonts)
 	unload_omnibar(&browser.omnibar)
+	delete_history(&browser.history)
 }
 
 update :: proc(browser: ^Browser, dt: f64) {
@@ -77,6 +80,7 @@ update :: proc(browser: ^Browser, dt: f64) {
 	}
 
 	update_omnibar(browser, dt)
+	update_history(browser, dt)
 	update_document(browser, dt, must_reload_layout)
 
 	key_debug := raylib.IsKeyPressed(.F3)
@@ -92,13 +96,23 @@ draw :: proc(browser: ^Browser) {
 
 	ClearBackground(color_background)
 	if document, exists := browser.document.(Document); exists do draw_document(browser, document)
+	if browser.history.visible do draw_history(browser)
 	if browser.omnibar.visible do draw_omnibar(browser)
 	if browser.debug {
 		ui := ui_scaling_pixels()
-		text := fmt.ctprintf("FPS: %d", GetFPS())
 		font := browser.fonts[FONT_SANS_REGULAR][.Small]
-		measure := MeasureTextEx(font, text, 24.0, 1.0)
-		DrawTextEx(font, text, ui.padding / 4, 24.0, 1.0, WHITE)
+		texts := [?]cstring{
+			fmt.ctprintf("FPS: %d", GetFPS()),
+			fmt.ctprintf("History: %d entries", len(browser.history.entries)),
+		}
+
+		offset := ui.padding.y / 4
+		for text in texts {
+			measure := MeasureTextEx(font, text, 24.0, 1.0)
+			DrawTextEx(font, text, { ui.padding.x / 4, offset }, 24.0, 1.0, WHITE)
+
+			offset += measure.y + measure.y / 2
+		}
 	}
 }
 
